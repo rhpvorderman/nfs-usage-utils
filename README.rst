@@ -1,5 +1,7 @@
-# nfs-usage-utils
-Python scripts using calls to libnfs for fast usage and dedup scripts. 
+===============
+nfs-usage-utils
+===============
+Python scripts using calls to libnfs for fast usage and dedup scripts.
 
 This project aims to provide the following tools for nfs:
 
@@ -15,7 +17,8 @@ https://pypi.org/project/libnfs/. But these are very old. No NFSv4
 support. This program will only be provided as source so it can be compiled 
 against whatever libnfs client is running on your systems.
 
-# Design
+Design
+======
 
 This is going to implement python bindings for libnfs where necessary using
 Python C extensions. The rest of the program is going to be implemented in 
