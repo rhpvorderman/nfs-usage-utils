@@ -20,3 +20,66 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+#define Py_LIMITED_API 0x030B0000
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
+#include "structmember.h"
+
+#include <nfsc/libnfs-raw.h>
+#include <nfsc/libnfs.h>
+
+
+typedef struct NfsStat_struct {
+    PyObject_HEAD;
+    struct nfs_stat_64 stat; 
+} NfsStat;
+
+static void 
+NfsStat_dealloc(NfsStat *self) 
+{
+    PyTypeObject *tp = Py_TYPE(self);
+    freefunc free_func = PyType_GetSlot(tp, Py_tp_free);
+    free_func(self);
+    Py_DECREF(tp);
+}
+
+static PyMemberDef NfsStat_members[] = {
+
+};
+
+
+typedef struct NfsDirEntry_struct {
+    PyObject_HEAD
+    PyObject *name;
+    PyObject *path;
+    PyObject *stat;
+} NfsDirEntry;
+
+static void 
+NfsDirEntry_dealloc(NfsDirEntry *self) 
+{
+    PyTypeObject *tp = Py_TYPE(self);
+    Py_XDECREF(self->name);
+    Py_XDECREF(self->path);
+    Py_XDECREF(self->stat);
+    freefunc free_func = PyType_GetSlot(tp, Py_tp_free);
+    free_func(self);
+    Py_DECREF(tp);
+}
+
+static PyMemberDef NfsDirEntry_members[] = {
+    {"name", T_OBJECT_EX, offsetof(NfsDirEntry, name), READONLY,
+     "the entry's base filename, relative to scandir() \"path\" argument"
+    },
+    {"path", T_OBJECT_EX, offsetof(NfsDirEntry, path), READONLY,
+     "the entry's base filename, relative to scandir() \"path\" argument"
+    },
+
+    {NULL,}
+};
+
+
+int main() {
+}
+
+
