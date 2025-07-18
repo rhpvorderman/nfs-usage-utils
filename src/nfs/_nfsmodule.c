@@ -70,14 +70,11 @@ static PyObject *
 NFSMount__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs) 
 {
     PyObject *url = NULL;
-    uid_t uid = getuid();
-    gid_t gid = getgid();
-    int version = NFS_V4;
     static char *format = "U|IIi:NFSMount.__new__";
-    static char *keywords[] = {"url", "uid", "gid", "version", NULL};
+    static char *keywords[] = {"url", NULL};
     if (PyArg_ParseTupleAndKeywords(
         args, kwargs, format, keywords,
-        &url, &uid, &gid, &version) < 0) {
+        &url) < 0) {
             return NULL;
         }
     if (!PyUnicode_IS_COMPACT_ASCII(url)) {
@@ -94,12 +91,6 @@ NFSMount__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     self->context = nfs_init_context();
     if (self->context == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to create context");
-    }
-    nfs_set_uid(self->context, uid);
-    nfs_set_gid(self->context, gid);
-    if (nfs_set_version(self->context, version) < 0) {
-        PyErr_Format(PyExc_ValueError, "Unsupported version: %d", version);
-        return NULL;
     }
     self->url = nfs_parse_url_dir(self->context, PyUnicode_DATA(url));
     if (self->url == NULL) {
@@ -202,5 +193,6 @@ PyInit__nfs(void)
     if (PyModule_AddType(m, &NFSMount_Type) < 0) {
         return NULL;
     }
+
     return m;
 }
