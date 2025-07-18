@@ -92,7 +92,7 @@ NFSMount__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (self->context == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to create context");
     }
-    self->url = nfs_parse_url_dir(self->context, PyUnicode_DATA(url));
+    self->url = nfs_parse_url_dir(self->context, PyUnicode_AsUTF8(url));
     if (self->url == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to parse URL.");
     } 
@@ -350,12 +350,76 @@ static PyTypeObject ScandirIterator_Type = {
     .tp_methods = ScandirIterator_methods,
 };
 
+PyDoc_STRVAR(_nfs_scandir__doc__,
+"scandir($module, nfs_mount, /, path=None)\n"
+"--\n"
+"\n"
+"Return an iterator of NfsDirEntry objects for given path on given nfs_mount.\n"
+"\n"
+"nfs_mount must be an initialized, unclosed NFSMount object."
+"path can be specified as either str, or a path-like object.\n"
+"\n"
+"If path is None, uses the path=\'/\'.");
+
+static PyObject *
+scandir(PyObject *module, PyObject *args, PyObject *kwargs) 
+{
+    PyObject *nfs_mount = NULL;
+    PyObject *path_in = NULL; 
+    static char *format = "O!|O:scandir";
+    static char *keywords[] = {"nfs_mount", "path", NULL};
+    if (PyArg_ParseTupleAndKeywords(args, kwargs, format, keywords, 
+     &nfs_mount, &path_in) < 0) {
+        return NULL;
+    }
+    if (path_in == NULL) {
+        path_in = PyUnicode_FromString("/");
+        if (path_in == NULL) {
+            return NULL;
+        }
+    }
+    PyObject *path = PyOS_FSPath(path_in);
+    if (path == NULL) {
+        return NULL;
+    }
+    /* No supporting of bytes. */
+    if (PyBytes_Check(path)) {
+        PyErr_Format(PyExc_TypeError, "Path should be a string, not bytes: %R", path_in);
+        return NULL;
+    }
+
+    ScandirIterator *iterator = PyObject_New(ScandirIterator, &ScandirIterator_Type);
+    if (iterator == NULL) {
+        return NULL;
+    }
+    struct nfs_context *context = ((NFSMount *)nfs_mount)->context;
+    struct nfsdir *dirp = NULL;
+    int ret;
+    Py_BEGIN_ALLOW_THREADS
+    ret = nfs_opendir(context, PyUnicode_AsUTF8(path), &dirp);
+    Py_END_ALLOW_THREADS
+    if (ret < 0) {
+        PyErr_SetString(PyExc_IOError, nfs_get_error(context));
+    }
+    iterator->nfs_mount = Py_NewRef(nfs_mount);
+    iterator->context = context;
+    iterator->path = path;
+    iterator->dirp = dirp;
+    return (PyObject *)iterator;
+}
+
+static PyMethodDef _nfs_methods[] = {
+    {"scandir", (PyCFunction)scandir, METH_VARARGS | METH_KEYWORDS, 
+     _nfs_scandir__doc__},
+    {NULL},
+};
+
 static struct PyModuleDef _nfs_module = {
     PyModuleDef_HEAD_INIT,
     "_nfs",   /* name of module */
     NULL, /* module documentation, may be NULL */
     0,
-    NULL,
+    _nfs_methods,
 };
 
 PyMODINIT_FUNC
