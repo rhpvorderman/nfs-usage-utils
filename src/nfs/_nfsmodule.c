@@ -156,9 +156,7 @@ static PyMemberDef NFSDirEntry_members[] = {
     {"st_rdev", T_ULONGLONG, DIRENT_OFFSET(rdev), READONLY, NULL},
     {"st_blksize", T_ULONGLONG, DIRENT_OFFSET(blksize), READONLY, NULL},
     {"st_blocks", T_ULONGLONG, DIRENT_OFFSET(blocks), READONLY, NULL},
-    {"st_atime_ns", T_UINT, DIRENT_OFFSET(atime_nsec), READONLY, NULL},
-    {"st_mtime_ns", T_UINT, DIRENT_OFFSET(mtime_nsec), READONLY, NULL},
-    {"st_ctime_ns", T_UINT, DIRENT_OFFSET(ctime_nsec), READONLY, NULL}, 
+
     {NULL,}
 };
 
