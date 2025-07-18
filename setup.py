@@ -6,10 +6,15 @@
 # This file is part of python-isal which is distributed under the
 # PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2.
 
+import os
+import sys
+
 from setuptools import Extension, setup
 
 setup(
     ext_modules=[
-        Extension("nfs._nfs", ["src/nfs/_nfsmodule.c"]),
+        Extension(
+            "nfs._nfs", ["src/nfs/_nfsmodule.c"],
+              libraries=["nfs"]),
     ]
 )

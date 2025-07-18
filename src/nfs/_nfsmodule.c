@@ -70,31 +70,26 @@ static PyObject *
 NFSMount__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs) 
 {
     PyObject *url = NULL;
-    static char *format = "U|IIi:NFSMount.__new__";
+    static char *format = "U|:NFSMount.__new__";
     static char *keywords[] = {"url", NULL};
-    if (PyArg_ParseTupleAndKeywords(
+    if (!PyArg_ParseTupleAndKeywords(
         args, kwargs, format, keywords,
-        &url) < 0) {
+        &url)) {
             return NULL;
         }
-    if (!PyUnicode_IS_COMPACT_ASCII(url)) {
-        PyErr_Format(
-            PyExc_ValueError, 
-            "url must be an ASCII only string. Got %R", 
-            url
-        );
-        return NULL;
-    }
+
     NFSMount *self = PyObject_New(NFSMount, type);
     self->context = NULL;
     self->url = NULL;
     self->context = nfs_init_context();
     if (self->context == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to create context");
+        return NULL;
     }
     self->url = nfs_parse_url_dir(self->context, PyUnicode_AsUTF8(url));
     if (self->url == NULL) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to parse URL.");
+        PyErr_Format(PyExc_RuntimeError, "Failed to parse URL: %R", url);
+        return NULL;
     } 
     
     int ret = nfs_mount(self->context, self->url->server, self->url->path);
@@ -138,7 +133,7 @@ static PyTypeObject NFSMount_Type = {
     .tp_basicsize = sizeof(NFSMount),
     .tp_dealloc = (destructor)NFSMount_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_new = NFSMount__new__,
+    .tp_new = (newfunc)NFSMount__new__,
     .tp_methods = NFSMount_methods,
 };
 
@@ -341,7 +336,7 @@ static PyMethodDef ScandirIterator_methods[] = {
 
 static PyTypeObject ScandirIterator_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "_nfs.scandir",
+    .tp_name = "_nfs.ScandirIterator",
     .tp_basicsize = sizeof(ScandirIterator),
     .tp_dealloc = (destructor)ScandirIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
@@ -368,17 +363,16 @@ scandir(PyObject *module, PyObject *args, PyObject *kwargs)
     PyObject *path_in = NULL; 
     static char *format = "O!|O:scandir";
     static char *keywords[] = {"nfs_mount", "path", NULL};
-    if (PyArg_ParseTupleAndKeywords(args, kwargs, format, keywords, 
-     &nfs_mount, &path_in) < 0) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, format, keywords, 
+     &NFSMount_Type, &nfs_mount, &path_in)) {
         return NULL;
     }
+    PyObject *path;
     if (path_in == NULL) {
-        path_in = PyUnicode_FromString("/");
-        if (path_in == NULL) {
-            return NULL;
-        }
+        path = PyUnicode_FromString("/");
+    } else {
+        path = PyOS_FSPath(path_in);
     }
-    PyObject *path = PyOS_FSPath(path_in);
     if (path == NULL) {
         return NULL;
     }
