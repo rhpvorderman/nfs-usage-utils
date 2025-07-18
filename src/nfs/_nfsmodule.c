@@ -105,6 +105,33 @@ NFSMount__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     return (PyObject *)self; 
 }
 
+static PyObject *
+NFSMount_close(NFSMount *self, PyObject *args) {
+    struct nfs_context *context = self->context;
+    if (context == NULL) {
+        Py_RETURN_NONE;
+    }
+    nfs_umount(context);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+NFSMount_enter(NFSMount *self, PyObject *args) {
+    return Py_NewRef(self);
+}
+
+static PyObject *
+NFSMount_exit(NFSMount *self, PyObject *args) {
+    return NFSMount_close(self, args);
+}
+
+static PyMethodDef NFSMount_methods[] = {
+    {"close", (PyCFunction)NFSMount_close, METH_NOARGS, NULL},
+    {"__enter__", (PyCFunction)NFSMount_enter, METH_NOARGS, NULL},
+    {"__exit__", (PyCFunction)NFSMount_exit, METH_VARARGS, NULL},
+    {NULL},
+};
+
 static PyTypeObject NFSMount_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "_nfs.NFSMount", 
@@ -112,6 +139,7 @@ static PyTypeObject NFSMount_Type = {
     .tp_dealloc = (destructor)NFSMount_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_new = NFSMount__new__,
+    .tp_methods = NFSMount_methods,
 };
 
 
