@@ -119,7 +119,20 @@ typedef struct NFSDirEntry_struct {
     PyObject_HEAD
     PyObject *name;
     PyObject *path;
-    struct nfsdirent entry;
+    uint64_t inode;
+    uint32_t type;
+    uint32_t mode;
+    uint64_t size;
+    uint32_t uid;
+    uint32_t gid;
+    uint32_t nlink;
+    uint64_t dev;
+    uint64_t rdev;
+    uint64_t blksize;
+    uint64_t blocks;
+    double atime;
+    double mtime;
+    double ctime;
 } NFSDirEntry;
 
 static void 
@@ -145,19 +158,21 @@ static PyMemberDef NFSDirEntry_members[] = {
         "the entry's full path name; equivalent to "
         "os.path.join(scandir_path, entry.name)"
     },
-    {"st_ino", T_ULONGLONG, DIRENT_OFFSET(inode), READONLY, NULL},
-    {"type", T_UINT, DIRENT_OFFSET(type), READONLY, NULL},
-    {"st_mode", T_UINT, DIRENT_OFFSET(mode), READONLY, NULL },
-    {"st_size", T_ULONGLONG, DIRENT_OFFSET(size), READONLY, NULL},
-    {"st_uid", T_UINT, DIRENT_OFFSET(uid), READONLY, NULL},
-    {"st_gid", T_UINT, DIRENT_OFFSET(gid), READONLY, NULL},
-    {"st_nlink", T_UINT, DIRENT_OFFSET(nlink), READONLY, NULL},
-    {"st_dev", T_ULONGLONG, DIRENT_OFFSET(dev), READONLY, NULL},
-    {"st_rdev", T_ULONGLONG, DIRENT_OFFSET(rdev), READONLY, NULL},
-    {"st_blksize", T_ULONGLONG, DIRENT_OFFSET(blksize), READONLY, NULL},
-    {"st_blocks", T_ULONGLONG, DIRENT_OFFSET(blocks), READONLY, NULL},
-
-    {NULL,}
+    {"st_ino", T_ULONGLONG, offsetof(NFSDirEntry, inode), READONLY, NULL},
+    {"type", T_UINT, offsetof(NFSDirEntry, inode), READONLY, NULL},
+    {"st_mode", T_UINT, offsetof(NFSDirEntry, inode), READONLY, NULL },
+    {"st_size", T_ULONGLONG, offsetof(NFSDirEntry, inode), READONLY, NULL},
+    {"st_uid", T_UINT, offsetof(NFSDirEntry, inode), READONLY, NULL},
+    {"st_gid", T_UINT, offsetof(NFSDirEntry, inode), READONLY, NULL},
+    {"st_nlink", T_UINT, offsetof(NFSDirEntry, inode), READONLY, NULL},
+    {"st_dev", T_ULONGLONG, offsetof(NFSDirEntry, inode), READONLY, NULL},
+    {"st_rdev", T_ULONGLONG, offsetof(NFSDirEntry, inode), READONLY, NULL},
+    {"st_blksize", T_ULONGLONG, offsetof(NFSDirEntry, inode), READONLY, NULL},
+    {"st_blocks", T_ULONGLONG, offsetof(NFSDirEntry, inode), READONLY, NULL},
+    {"st_atime", T_DOUBLE, offsetof(NFSDirEntry, atime), READONLY, NULL},
+    {"st_mtime", T_DOUBLE, offsetof(NFSDirEntry, mtime), READONLY, NULL},
+    {"st_ctime", T_DOUBLE, offsetof(NFSDirEntry, ctime), READONLY, NULL},
+    {NULL,},
 };
 
 static PyTypeObject NFSDirEntry_Type = {
@@ -169,6 +184,40 @@ static PyTypeObject NFSDirEntry_Type = {
     .tp_members =  NFSDirEntry_members,
 };
 
+
+static PyObject *
+NFSDirEntry_from_dirpath_and_dirent(char *dirpath, struct nfsdirent *dirent)
+{
+    NFSDirEntry *self = PyObject_New(NFSDirEntry, &NFSDirEntry_Type);
+    if (self == NULL) {
+        return NULL;
+    }
+    PyObject *name = PyUnicode_FromString(dirent->name);
+    if (name == NULL) {
+        return NULL;
+    }
+    PyObject *path = PyUnicode_FromFormat("%s/%s", dirpath, name);
+    if (path == NULL) {
+        return NULL;
+    }
+    self->name = name;
+    self->path = path;
+    self->inode = dirent->inode;
+    self->type = dirent->type;
+    self->mode = dirent->mode;
+    self->size = dirent->size;
+    self->uid = dirent->uid, 
+    self->gid = dirent->gid,
+    self->nlink = dirent->nlink, 
+    self->dev = dirent->dev;
+    self->rdev = dirent->rdev;
+    self->blksize = dirent->blksize;
+    self->blocks = dirent->blocks;
+    self->atime = (double)(dirent->atime.tv_sec) + 1e-9 * (double)(dirent->atime_nsec);
+    self->mtime = (double)(dirent->mtime.tv_sec) + 1e-9 * (double)(dirent->mtime_nsec);
+    self->ctime = (double)(dirent->ctime.tv_sec) + 1e-9 * (double)(dirent->ctime_nsec);
+    return (PyObject *)self;
+}
 
 static struct PyModuleDef _nfs_module = {
     PyModuleDef_HEAD_INIT,
