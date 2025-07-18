@@ -24,38 +24,115 @@ SOFTWARE.
 #include <Python.h>
 #include "structmember.h"
 
+#include <nfsc/libnfs-raw-nfs.h>
 #include <nfsc/libnfs-raw-nfs4.h>
 #include <nfsc/libnfs.h>
 
+// typedef struct NFSStat_struct {
+//     PyObject_HEAD;
+//     struct nfs_stat_64 stat; 
+// } NFSStat;
 
-typedef struct NfsStat_struct {
-    PyObject_HEAD;
-    struct nfs_stat_64 stat; 
-} NfsStat;
+// static void 
+// NFSStat_dealloc(NFSStat *self) 
+// {
+//     PyTypeObject *tp = Py_TYPE(self);
+//     freefunc free_func = PyType_GetSlot(tp, Py_tp_free);
+//     free_func(self);
+//     Py_DECREF(tp);
+// }
 
-static void 
-NfsStat_dealloc(NfsStat *self) 
+// static PyMemberDef NFSStat_members[] = {
+
+// };
+
+typedef struct NFSMount_struct {
+    PyObject_HEAD
+    struct nfs_context *context;
+    struct nfs_url *url;
+} NFSMount;
+
+static void NFSMount_dealloc(NFSMount *self) 
 {
     PyTypeObject *tp = Py_TYPE(self);
+    if (self->context != NULL) {
+        nfs_destroy_context(self->context);
+    }
+    if (self->url != NULL) {
+        nfs_destroy_url(self->url);
+    }
     freefunc free_func = PyType_GetSlot(tp, Py_tp_free);
     free_func(self);
     Py_DECREF(tp);
 }
 
-static PyMemberDef NfsStat_members[] = {
+static PyObject *
+NFSMount__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs) 
+{
+    PyObject *url = NULL;
+    uid_t uid = getuid();
+    gid_t gid = getgid();
+    int version = NFS_V4;
+    static char *format = "U|IIi:NFSMount.__new__";
+    static char *keywords[] = {"url", "uid", "gid", "version", NULL};
+    if (PyArg_ParseTupleAndKeywords(
+        args, kwargs, format, keywords,
+        &url, &uid, &gid, &version) < 0) {
+            return NULL;
+        }
+    if (!PyUnicode_IS_COMPACT_ASCII(url)) {
+        PyErr_Format(
+            PyExc_ValueError, 
+            "url must be an ASCII only string. Got %R", 
+            url
+        );
+        return NULL;
+    }
+    NFSMount *self = PyObject_New(NFSMount, type);
+    self->context = NULL;
+    self->url = NULL;
+    self->context = nfs_init_context();
+    if (self->context == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to create context");
+    }
+    nfs_set_uid(self->context, uid);
+    nfs_set_gid(self->context, gid);
+    if (nfs_set_version(self->context, version) < 0) {
+        PyErr_Format(PyExc_ValueError, "Unsupported version: %d", version);
+        return NULL;
+    }
+    self->url = nfs_parse_url_dir(self->context, PyUnicode_DATA(url));
+    if (self->url == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to parse URL.");
+    } 
+    
+    int ret = nfs_mount(self->context, self->url->server, self->url->path);
+    if (ret != 0) {
+        PyErr_SetString(PyExc_IOError, nfs_get_error(self->context));
+        return NULL;
+    }
+    return (PyObject *)self; 
+}
 
+static PyTypeObject NFSMount_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_nfs.NFSMount", 
+    .tp_basicsize = sizeof(NFSMount),
+    .tp_dealloc = (destructor)NFSMount_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = NFSMount__new__,
 };
 
 
-typedef struct NfsDirEntry_struct {
+typedef struct NFSDirEntry_struct {
     PyObject_HEAD
     PyObject *name;
     PyObject *path;
     struct nfsdirent entry;
-} NfsDirEntry;
+} NFSDirEntry;
 
 static void 
-NfsDirEntry_dealloc(NfsDirEntry *self) 
+NFSDirEntry_dealloc(NFSDirEntry *self) 
 {
     PyTypeObject *tp = Py_TYPE(self);
     Py_XDECREF(self->name);
@@ -65,15 +142,15 @@ NfsDirEntry_dealloc(NfsDirEntry *self)
     Py_DECREF(tp);
 }
 
-#define DIRENT_OFFSET(x) (offsetof(NfsDirEntry, entry) + offsetof(struct nfsdirent, x))
+#define DIRENT_OFFSET(x) (offsetof(NFSDirEntry, entry) + offsetof(struct nfsdirent, x))
 
-static PyMemberDef NfsDirEntry_members[] = {
+static PyMemberDef NFSDirEntry_members[] = {
     {
-        "name", T_OBJECT_EX, offsetof(NfsDirEntry, name), READONLY,
+        "name", T_OBJECT_EX, offsetof(NFSDirEntry, name), READONLY,
         "the entry's base filename, relative to scandir() \"path\" argument"
     },
     {
-        "path", T_OBJECT_EX, offsetof(NfsDirEntry, path), READONLY,
+        "path", T_OBJECT_EX, offsetof(NFSDirEntry, path), READONLY,
         "the entry's full path name; equivalent to "
         "os.path.join(scandir_path, entry.name)"
     },
@@ -94,13 +171,13 @@ static PyMemberDef NfsDirEntry_members[] = {
     {NULL,}
 };
 
-static PyTypeObject NfsDirEntry_Type = {
+static PyTypeObject NFSDirEntry_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "_nfs.NfsDirEntry",
-    .tp_basicsize = sizeof(NfsDirEntry),
-    .tp_dealloc = (destructor)NfsDirEntry_dealloc,
+    .tp_name = "_nfs.NFSDirEntry",
+    .tp_basicsize = sizeof(NFSDirEntry),
+    .tp_dealloc = (destructor)NFSDirEntry_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
-    .tp_members =  NfsDirEntry_members,
+    .tp_members =  NFSDirEntry_members,
 };
 
 
@@ -119,7 +196,10 @@ PyInit__nfs(void)
     if (m == NULL) {
         return NULL;
     }
-    if (PyModule_AddType(m, &NfsDirEntry_Type) < 0) {
+    if (PyModule_AddType(m, &NFSDirEntry_Type) < 0) {
+        return NULL;
+    }
+    if (PyModule_AddType(m, &NFSMount_Type) < 0) {
         return NULL;
     }
     return m;
