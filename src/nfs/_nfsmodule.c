@@ -194,5 +194,18 @@ PyInit__nfs(void)
         return NULL;
     }
 
+    PyModule_AddIntMacro(m, NFS_V2);
+    PyModule_AddIntMacro(m, NFS_V3);
+    PyModule_AddIntMacro(m, NFS_V4);
+
+    PyModule_AddIntMacro(m, NF4REG);
+    PyModule_AddIntMacro(m, NF4DIR);
+    PyModule_AddIntMacro(m, NF4BLK);
+    PyModule_AddIntMacro(m, NF4CHR);
+    PyModule_AddIntMacro(m, NF4LNK);
+    PyModule_AddIntMacro(m, NF4SOCK);
+    PyModule_AddIntMacro(m, NF4FIFO);
+    PyModule_AddIntMacro(m, NF4ATTRDIR);
+    PyModule_AddIntMacro(m, NF4NAMEDATTR);
     return m;
 }
