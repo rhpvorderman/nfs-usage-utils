@@ -186,17 +186,17 @@ static PyTypeObject NFSDirEntry_Type = {
 
 
 static PyObject *
-NFSDirEntry_from_dirpath_and_dirent(char *dirpath, struct nfsdirent *dirent)
+NFSDirEntry_from_dirpath_and_dirent(PyObject *dirpath, struct nfsdirent *dirent)
 {
     NFSDirEntry *self = PyObject_New(NFSDirEntry, &NFSDirEntry_Type);
     if (self == NULL) {
         return NULL;
     }
-    PyObject *name = PyUnicode_FromString(dirent->name);
+    PyObject *name = PyUnicode_DecodeFSDefault(dirent->name);
     if (name == NULL) {
         return NULL;
     }
-    PyObject *path = PyUnicode_FromFormat("%s/%s", dirpath, name);
+    PyObject *path = PyUnicode_FromFormat("%S/%S", dirpath, name);
     if (path == NULL) {
         return NULL;
     }
@@ -219,6 +219,109 @@ NFSDirEntry_from_dirpath_and_dirent(char *dirpath, struct nfsdirent *dirent)
     return (PyObject *)self;
 }
 
+
+typedef struct ScandirIterator_struct {
+    PyObject_HEAD
+    PyObject *nfs_mount;
+    PyObject *path;
+    struct nfs_context *context;
+    struct nfsdir *dirp;
+} ScandirIterator;
+
+static void
+ScandirIterator_dealloc(ScandirIterator *iterator)
+{
+    PyTypeObject *tp = Py_TYPE(iterator);
+    Py_XDECREF(iterator->nfs_mount);
+    Py_XDECREF(iterator->path);
+    freefunc free_func = PyType_GetSlot(tp, Py_tp_free);
+    free_func(iterator);
+    Py_DECREF(tp);
+}
+
+static void
+ScandirIterator_closedir(ScandirIterator *iterator)
+{
+    struct nfsdir *dirp = iterator->dirp;
+
+    if (!dirp) {
+        return;
+    }
+    iterator->dirp = NULL;
+    Py_BEGIN_ALLOW_THREADS
+    nfs_closedir(iterator->context, dirp);
+    Py_END_ALLOW_THREADS
+    return;
+}
+
+static PyObject *
+ScandirIterator_iternext(ScandirIterator *iterator) 
+{
+    if (!iterator->dirp) {
+        return NULL;
+    }
+    
+    while (1) {
+        struct nfsdirent *entry = nfs_readdir(iterator->context, iterator->dirp);
+        if (entry == NULL) {
+            break;
+        }
+        char *name = entry->name;
+        size_t name_length = strlen(name); 
+        if (name[0] == '.') {
+            if (name_length == 1) {
+                continue;
+            }
+            if (name_length == 2 && name[1] == '.') {
+                continue;
+            }
+        }
+        return NFSDirEntry_from_dirpath_and_dirent(iterator->path, entry);
+    }
+    ScandirIterator_closedir(iterator);
+    return NULL;
+}
+
+static PyObject *
+ScandirIterator_close(ScandirIterator *self, PyObject *args)
+{
+    ScandirIterator_closedir(self);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+ScandirIterator_enter(PyObject *self, PyObject *args)
+{
+    Py_INCREF(self);
+    return self;
+}
+
+static PyObject *
+ScandirIterator_exit(ScandirIterator *self, PyObject *args)
+{
+    ScandirIterator_closedir(self);
+    Py_RETURN_NONE;
+}
+
+static PyMethodDef ScandirIterator_methods[] = {
+    {"__enter__", (PyCFunction)ScandirIterator_enter, METH_NOARGS},
+    {"__exit__", (PyCFunction)ScandirIterator_exit, METH_VARARGS},
+    {"close", (PyCFunction)ScandirIterator_close, METH_NOARGS},
+    {NULL}
+};
+
+
+static PyTypeObject ScandirIterator_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_nfs.scandir",
+    .tp_basicsize = sizeof(ScandirIterator),
+    .tp_dealloc = (destructor)ScandirIterator_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
+    .tp_iter = PyObject_SelfIter,
+    .tp_iternext = (iternextfunc)ScandirIterator_iternext,
+    .tp_methods = ScandirIterator_methods,
+};
+
 static struct PyModuleDef _nfs_module = {
     PyModuleDef_HEAD_INIT,
     "_nfs",   /* name of module */
@@ -238,6 +341,10 @@ PyInit__nfs(void)
         return NULL;
     }
     if (PyModule_AddType(m, &NFSMount_Type) < 0) {
+        return NULL;
+    }
+
+    if (PyModule_AddType(m, &ScandirIterator_Type)) {
         return NULL;
     }
 
