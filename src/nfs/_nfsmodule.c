@@ -28,13 +28,13 @@ SOFTWARE.
 #include <nfsc/libnfs-raw-nfs4.h>
 #include <nfsc/libnfs.h>
 
+static PyObject *OsPathJoinFunc;
+
 typedef struct NFSMount_struct {
     PyObject_HEAD
     struct nfs_context *context;
     struct nfs_url *url;
 } NFSMount;
-
-static PyObject *OsPathJoinFunc;
 
 static void NFSMount_dealloc(NFSMount *self) 
 {
