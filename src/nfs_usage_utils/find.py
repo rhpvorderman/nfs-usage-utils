@@ -17,6 +17,36 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+"""
+Simple utility to list all the files present on the NFS filesystem. As of yet
+no predicates are implemented.
+"""
 
-from ._nfs import *
-from ._version import __version__
+import argparse
+
+import nfs
+
+def find(nfs_mount: nfs.NFSMount, path: str = "/"):
+    with nfs.scandir(nfs_mount, path) as d:
+        for entry in d:
+            yield entry.path
+            if entry.is_dir():
+                yield from find(nfs_mount, entry.path)
+
+
+
+def argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(__doc__)
+    parser.add_argument("URL")
+    return parser
+
+
+def main():
+    args = argument_parser().parse_args()
+    with nfs.NFSMount(args.URL) as m:
+        for path in find(m):
+            print(path)
+
+
+if __name__ == "__main__":
+    main()

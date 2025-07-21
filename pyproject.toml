@@ -26,6 +26,9 @@ classifiers = [
 ]
 urls.homepage = "https://github.com/rhpvorderman/nfs-usage-utils"
 
+[project.scripts]
+nfs-find = "nfs_usage_utils.find:main"
+
 [tool.setuptools_scm]
 version_file = "src/nfs/_version.py"
 
