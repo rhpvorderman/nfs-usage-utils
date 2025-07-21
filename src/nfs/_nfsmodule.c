@@ -407,7 +407,7 @@ scandir(PyObject *module, PyObject *args, PyObject *kwargs)
     }
     PyObject *path;
     if (path_in == NULL) {
-        path = PyUnicode_FromString("/");
+        path = PyUnicode_DecodeASCII("/", 1, NULL);
     } else {
         path = PyOS_FSPath(path_in);
     }
