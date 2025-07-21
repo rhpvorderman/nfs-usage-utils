@@ -28,8 +28,6 @@ SOFTWARE.
 #include <nfsc/libnfs-raw-nfs4.h>
 #include <nfsc/libnfs.h>
 
-static PyObject *OsPathJoinFunc;
-
 typedef struct NFSMount_struct {
     PyObject_HEAD
     struct nfs_context *context;
@@ -257,13 +255,12 @@ NFSDirEntry_from_dirpath_and_dirent(PyObject *dirpath, struct nfsdirent *dirent)
     }
     PyObject *name = PyUnicode_FromString(dirent->name);
     if (name == NULL) {
-        Py_DECREF(self);
         return NULL;
     }
-    PyObject *path = PyObject_CallFunctionObjArgs(OsPathJoinFunc, dirpath, name, NULL);
+
+    PyObject *path = PyUnicode_FromFormat("%S/%S", dirpath, name);
+
     if (path == NULL) {
-        Py_DECREF(self);
-        Py_DECREF(name);
         return NULL;
     }
     self->name = name;
@@ -462,14 +459,6 @@ PyInit__nfs(void)
 {
     PyObject *m = PyModule_Create(&_nfs_module);
     if (m == NULL) {
-        return NULL;
-    }
-    PyObject *os_path_module = PyImport_AddModule("os.path");
-    if (os_path_module == NULL) {
-        return NULL;
-    }
-    OsPathJoinFunc = PyObject_GetAttrString(os_path_module, "join");
-    if (OsPathJoinFunc == NULL) {
         return NULL;
     }
     if (PyModule_AddType(m, &NFSDirEntry_Type) < 0) {
