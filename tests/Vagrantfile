@@ -1,0 +1,32 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+Vagrant.configure("2") do |config|
+  config.vm.box = "debian/bookworm64"
+
+
+
+  # Enable provisioning with a shell script. Additional provisioners such as
+  # Ansible, Chef, Docker, Puppet and Salt are also available. Please see the
+  # documentation for more information about their specific syntax and use.
+  config.vm.provision "shell", inline: <<-SHELL
+    apt-get update
+    apt-get install -y --no-install-recommends nfs-kernel-server
+    mkdir -p /exports/
+    for i in {1..50000}
+    do
+		echo $i > /exports/${i}.txt
+		mkdir -p /exports/dir_${i}
+		ln -sf /exports/${i}.txt /exports/symlink_${i}.txt
+		ln -f /exports/${i}.txt /exports/hardlink_${i}.txt
+	done
+    chown -R nobody:nogroup /exports
+    chmod -R 775 /exports
+    echo $'/exports\t192.168.0.0/16(insecure,rw,sync,no_subtree_check)' > /etc/exports
+    systemctl restart nfs-kernel-server
+  SHELL
+end
