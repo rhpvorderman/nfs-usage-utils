@@ -28,23 +28,6 @@ SOFTWARE.
 #include <nfsc/libnfs-raw-nfs4.h>
 #include <nfsc/libnfs.h>
 
-// typedef struct NFSStat_struct {
-//     PyObject_HEAD;
-//     struct nfs_stat_64 stat; 
-// } NFSStat;
-
-// static void 
-// NFSStat_dealloc(NFSStat *self) 
-// {
-//     PyTypeObject *tp = Py_TYPE(self);
-//     freefunc free_func = PyType_GetSlot(tp, Py_tp_free);
-//     free_func(self);
-//     Py_DECREF(tp);
-// }
-
-// static PyMemberDef NFSStat_members[] = {
-
-// };
 
 typedef struct NFSMount_struct {
     PyObject_HEAD
