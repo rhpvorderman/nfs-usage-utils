@@ -45,9 +45,7 @@ static void NFSMount_dealloc(NFSMount *self)
     if (self->url != NULL) {
         nfs_destroy_url(self->url);
     }
-    freefunc free_func = PyType_GetSlot(tp, Py_tp_free);
-    free_func(self);
-    Py_DECREF(tp);
+    tp->tp_free(self);
 }
 
 static PyObject *
@@ -148,9 +146,7 @@ NFSDirEntry_dealloc(NFSDirEntry *self)
     PyTypeObject *tp = Py_TYPE(self);
     Py_XDECREF(self->name);
     Py_XDECREF(self->path);
-    freefunc free_func = PyType_GetSlot(tp, Py_tp_free);
-    free_func(self);
-    Py_DECREF(tp);
+    tp->tp_free(self);
 }
 
 #define DIRENT_OFFSET(x) (offsetof(NFSDirEntry, entry) + offsetof(struct nfsdirent, x))
@@ -264,7 +260,7 @@ NFSDirEntry_from_dirpath_and_dirent(PyObject *dirpath, struct nfsdirent *dirent)
         Py_DECREF(self);
         return NULL;
     }
-    PyObject *path = PyObject_CallFunctionObjArgs(OsPathJoinFunc, dirpath, name);
+    PyObject *path = PyObject_CallFunctionObjArgs(OsPathJoinFunc, dirpath, name, NULL);
     if (path == NULL) {
         Py_DECREF(self);
         Py_DECREF(name);
@@ -304,9 +300,7 @@ ScandirIterator_dealloc(ScandirIterator *iterator)
     PyTypeObject *tp = Py_TYPE(iterator);
     Py_XDECREF(iterator->nfs_mount);
     Py_XDECREF(iterator->path);
-    freefunc free_func = PyType_GetSlot(tp, Py_tp_free);
-    free_func(iterator);
-    Py_DECREF(tp);
+    tp->tp_free(iterator);
 }
 
 static void
