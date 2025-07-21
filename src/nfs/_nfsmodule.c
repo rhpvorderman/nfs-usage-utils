@@ -165,7 +165,9 @@ static PyMemberDef NFSDirEntry_members[] = {
         "os.path.join(scandir_path, entry.name)"
     },
     {"st_ino", T_ULONGLONG, offsetof(NFSDirEntry, inode), READONLY, NULL},
-    {"type", T_UINT, offsetof(NFSDirEntry, inode), READONLY, NULL},
+    {"type", T_UINT, offsetof(NFSDirEntry, inode), READONLY, 
+     "Type information as returned by NFS READDIR call. "
+     "Can be checked using the constants  NF4REG, NF4DIR etc."},
     {"st_mode", T_UINT, offsetof(NFSDirEntry, inode), READONLY, NULL },
     {"st_size", T_ULONGLONG, offsetof(NFSDirEntry, inode), READONLY, NULL},
     {"st_uid", T_UINT, offsetof(NFSDirEntry, inode), READONLY, NULL},
@@ -181,6 +183,64 @@ static PyMemberDef NFSDirEntry_members[] = {
     {NULL,},
 };
 
+static PyObject *
+NFSDirEntry_is_file(NFSDirEntry *self, PyObject *args)
+{
+    /* Constants are the same in current source. Do a compile time check and
+       use one of them for the comparison, with a not-implemented fallback if
+       the libnfs implementation changes. */
+    #if NF2REG == NF3REG && NF3REG == NF4REG
+    return PyBool_FromLong(self->type == NF4REG);
+    #else
+    PyErr_SetString(PyExc_NotImplementedError, "is_file not implemented");
+    #endif
+}
+
+
+static PyObject *
+NFSDirEntry_is_dir(NFSDirEntry *self, PyObject *args)
+{
+    /* Constants are the same in current source. Do a compile time check and
+       use one of them for the comparison, with a not-implemented fallback if
+       the libnfs implementation changes. */
+    #if NF2DIR == NF3DIR && NF3DIR == NF4DIR
+    return PyBool_FromLong(self->type == NF4DIR);
+    #else
+    PyErr_SetString(PyExc_NotImplementedError, "is_dir not implemented");
+    #endif
+}
+
+static PyObject *
+NFSDirEntry_is_symlink(NFSDirEntry *self, PyObject *args)
+{
+    /* Constants are the same in current source. Do a compile time check and
+       use one of them for the comparison, with a not-implemented fallback if
+       the libnfs implementation changes. */
+    #if NF2LNK == NF3LNK && NF3LNK == NF4LNK
+    return PyBool_FromLong(self->type == NF4LNK);
+    #else
+    PyErr_SetString(PyExc_NotImplementedError, "is_symlink not implemented");
+    #endif
+}
+
+static PyObject *NFSDirEntry_inode(NFSDirEntry *self, PyObject *args)
+{
+    return PyLong_FromUnsignedLongLong(self->inode);
+}
+
+static PyMethodDef NFSDirEntry_methods[] = {
+    {"is_dir", (PyCFunction)NFSDirEntry_is_dir, METH_NOARGS, 
+     "Return true if the entry is a directory; does NOT follow symlinks."},
+    {"is_file", (PyCFunction)NFSDirEntry_is_file, METH_NOARGS, 
+     "Return true if the entry is a directory; does NOT follow symlinks."},
+     {NULL},
+    {"is_symlink", (PyCFunction)NFSDirEntry_is_symlink, METH_NOARGS, 
+     "Return true if the entry is a directory."},
+    {"inode", (PyCFunction)NFSDirEntry_inode, METH_NOARGS, 
+     "Return the inode of the entry; same as entry.st_ino."},
+    {NULL},
+};
+
 static PyTypeObject NFSDirEntry_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "_nfs.NFSDirEntry",
@@ -188,6 +248,7 @@ static PyTypeObject NFSDirEntry_Type = {
     .tp_dealloc = (destructor)NFSDirEntry_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
     .tp_members =  NFSDirEntry_members,
+    .tp_methods = NFSDirEntry_methods,
 };
 
 
@@ -430,5 +491,21 @@ PyInit__nfs(void)
     PyModule_AddIntMacro(m, NF4FIFO);
     PyModule_AddIntMacro(m, NF4ATTRDIR);
     PyModule_AddIntMacro(m, NF4NAMEDATTR);
+
+    PyModule_AddIntMacro(m, NF3REG);
+    PyModule_AddIntMacro(m, NF3DIR);
+    PyModule_AddIntMacro(m, NF3BLK);
+    PyModule_AddIntMacro(m, NF3CHR);
+    PyModule_AddIntMacro(m, NF3LNK);
+    PyModule_AddIntMacro(m, NF3SOCK);
+    PyModule_AddIntMacro(m, NF3FIFO);
+
+    PyModule_AddIntMacro(m, NF2NON);
+    PyModule_AddIntMacro(m, NF2REG);
+    PyModule_AddIntMacro(m, NF2DIR);
+    PyModule_AddIntMacro(m, NF2BLK);
+    PyModule_AddIntMacro(m, NF2CHR);
+    PyModule_AddIntMacro(m, NF2LNK);
+
     return m;
 }
