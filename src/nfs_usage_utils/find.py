@@ -23,10 +23,13 @@ no predicates are implemented.
 """
 
 import argparse
+import os
 
 import nfs
 
+from .fstab import path_to_nfs_url
 from .nfscrawler import crawlnfs
+
 
 def find(nfs_mount: nfs.NFSMount, path: str = "/"):
     for entry in crawlnfs(nfs_mount, path):
@@ -35,15 +38,24 @@ def find(nfs_mount: nfs.NFSMount, path: str = "/"):
 
 def argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument("URL")
+    parser.add_argument("path", help="Path or URL")
+    parser.add_argument("--fstab", default="/etc/fstab")
     return parser
 
 
 def main():
     args = argument_parser().parse_args()
-    with nfs.NFSMount(args.URL) as m:
+    path = args.path
+    if path.startswith("nfs://"):
+        prefix = "/"
+        url = path
+    else:
+        prefix = path
+        url = path_to_nfs_url(path, args.fstab)
+    with nfs.NFSMount(url) as m:
         for path in find(m):
-            print(path)
+            new_path = os.path.normpath(f"{prefix}/{path}")
+            print(new_path)
 
 
 if __name__ == "__main__":
