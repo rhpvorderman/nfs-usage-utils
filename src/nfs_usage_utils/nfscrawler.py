@@ -91,7 +91,8 @@ class ThreadedNfsCrawler:
                 return
             busy.set()
             try:
-                result = tuple(nfs.scandir(nfs_mount, path))
+                iterator = nfs.scandir(nfs_mount, path)
+                result = tuple(iterator)
             except OSError as e:
                 warnings.warn(f"{type(e).__name__}: {e}")
                 continue
