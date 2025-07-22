@@ -32,7 +32,7 @@ def crawlnfs_simple(nfs_mount: nfs.NFSMount, path: str = "/"
     try:
         d = nfs.scandir(nfs_mount, path)
     except OSError as e:
-        warnings.warn(str(e))
+        warnings.warn(f"{type(e).__name__}: {e}")
         return
     with d:
         for entry in d:

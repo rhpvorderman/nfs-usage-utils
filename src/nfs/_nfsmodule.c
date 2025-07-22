@@ -28,6 +28,19 @@ SOFTWARE.
 #include <nfsc/libnfs-raw-nfs4.h>
 #include <nfsc/libnfs.h>
 
+static PyObject *
+nfs_error_to_python_error(int nfs_error) {
+    /* See https://datatracker.ietf.org/doc/html/rfc7530#section-13 */
+    switch (nfs_error) {
+        case NFS4ERR_ACCESS:
+            return PyExc_PermissionError;
+        case NFS4ERR_NOENT:
+            return PyExc_FileNotFoundError;
+        default:
+            return PyExc_OSError;
+    }
+}
+
 typedef struct NFSMount_struct {
     PyObject_HEAD
     struct nfs_context *context;
@@ -69,13 +82,13 @@ NFSMount__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     nfs_set_version(self->context, NFS_V4);
     self->url = nfs_parse_url_dir(self->context, PyUnicode_AsUTF8(url));
     if (self->url == NULL) {
-        PyErr_Format(PyExc_RuntimeError, "Failed to parse URL: %R", url);
+        PyErr_Format(PyExc_ValueError, "Invalid URL: %R", url);
         return NULL;
     } 
     
     int ret = nfs_mount(self->context, self->url->server, self->url->path);
     if (ret != 0) {
-        PyErr_SetString(PyExc_IOError, nfs_get_error(self->context));
+        PyErr_SetString(nfs_error_to_python_error(-ret), nfs_get_error(self->context));
         return NULL;
     }
     return (PyObject *)self; 
@@ -456,7 +469,7 @@ scandir(PyObject *module, PyObject *args, PyObject *kwargs)
     ret = nfs_opendir(context, PyUnicode_AsUTF8(path), &dirp);
     Py_END_ALLOW_THREADS
     if (ret < 0) {
-        PyErr_SetString(PyExc_IOError, nfs_get_error(context));
+        PyErr_SetString(nfs_error_to_python_error(-ret), nfs_get_error(context));
         return NULL;
     }
     iterator->nfs_mount = Py_NewRef(nfs_mount);
