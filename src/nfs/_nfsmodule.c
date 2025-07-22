@@ -257,8 +257,14 @@ NFSDirEntry_from_dirpath_and_dirent(PyObject *dirpath, struct nfsdirent *dirent)
     if (name == NULL) {
         return NULL;
     }
-
-    PyObject *path = PyUnicode_FromFormat("%S/%S", dirpath, name);
+    Py_ssize_t dirpath_size = PyUnicode_GET_LENGTH(dirpath);
+    Py_UCS4 last_char = PyUnicode_READ_CHAR(dirpath, dirpath_size - 1);
+    PyObject *path;
+    if (last_char == '/') {
+        path = PyUnicode_Concat(dirpath, name);
+    } else {
+        path = PyUnicode_FromFormat("%S/%S", dirpath, name);
+    }
 
     if (path == NULL) {
         return NULL;
