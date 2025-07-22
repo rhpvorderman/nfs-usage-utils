@@ -31,8 +31,8 @@ from .fstab import path_to_nfs_url
 from .nfscrawler import crawlnfs
 
 
-def find(nfs_mount: nfs.NFSMount, path: str = "/"):
-    for entry in crawlnfs(nfs_mount, path):
+def find(nfs_url: str, threads: int = 0):
+    for entry in crawlnfs(nfs_url, threads=threads):
         yield entry.path
 
 
@@ -40,6 +40,7 @@ def argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument("path", help="Path or URL")
     parser.add_argument("--fstab", default="/etc/fstab")
+    parser.add_argument("--threads", type=int, default=0)
     return parser
 
 
@@ -52,10 +53,9 @@ def main():
     else:
         prefix = path
         url = path_to_nfs_url(path, args.fstab)
-    with nfs.NFSMount(url) as m:
-        for path in find(m):
-            new_path = os.path.normpath(f"{prefix}/{path}")
-            print(new_path)
+    for path in find(url, threads=args.threads):
+        new_path = os.path.normpath(f"{prefix}/{path}")
+        print(new_path)
 
 
 if __name__ == "__main__":
