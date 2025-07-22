@@ -474,9 +474,10 @@ scandir(PyObject *module, PyObject *args, PyObject *kwargs)
     }
     struct nfs_context *context = ((NFSMount *)nfs_mount)->context;
     struct nfsdir *dirp = NULL;
+    const char *path_ptr = PyUnicode_AsUTF8(path);
     int ret;
     Py_BEGIN_ALLOW_THREADS
-    ret = nfs_opendir(context, PyUnicode_AsUTF8(path), &dirp);
+    ret = nfs_opendir(context, path_ptr, &dirp);
     Py_END_ALLOW_THREADS
     if (ret < 0) {
         PyErr_SetString(nfs_error_to_python_error(-ret), nfs_get_error(context));
