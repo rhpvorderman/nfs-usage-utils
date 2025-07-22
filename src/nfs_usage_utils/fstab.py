@@ -17,9 +17,14 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import argparse
 import os.path
 import typing
 from typing import Iterable, Iterator, Tuple
+
+"""
+Parse a path and an fstab file with nfs mounts to into a libnfs url.
+"""
 
 class FSTabEntry(typing.NamedTuple):
     source: str  # Source
@@ -32,7 +37,7 @@ class FSTabEntry(typing.NamedTuple):
     @classmethod
     def from_fstab_line(cls, line:str):
         line = line.strip()
-        source, target, type, mnt_opts, dump, passno = line.split("\t")
+        source, target, type, mnt_opts, dump, passno = line.split()
         mount_options = tuple(mnt_opts.split(","))
         return cls(
             source,
@@ -53,6 +58,11 @@ class FSTabEntry(typing.NamedTuple):
 def parse_fstab(fstab: str = "/etc/fstab") -> Iterator[FSTabEntry]:
     with open(fstab, "rt") as f:
         for line in f:
+            if line.startswith("#"):
+                continue
+            if not line.strip():
+                # empty line
+                continue
             yield FSTabEntry.from_fstab_line(line)
 
 
@@ -99,7 +109,24 @@ def path_to_nfs_url(path: str, fstab: str = "/etc/fstab") -> str:
                     f"Parsed folder, "f"'{folder}' does not start with '/'. "
                     f"This was not anticipated.")
             path_in_folder = os.path.relpath(path, mount_path)
-            folder = os.path.join(folder, path_in_folder)
+            folder = os.path.normpath(os.path.join(folder, path_in_folder))
             url_options = fstab_mount_options_to_url_options(entry.mount_options)
             return f"nfs://{server}{folder}{url_options}"
     raise RuntimeError("Matching fstab entry not found")
+
+
+def argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(__doc__)
+    parser.add_argument("path", help="Path on the filesystem.")
+    parser.add_argument("--fstab", default="/etc/fstab",
+                        help="Location of fstab. Default: '/etc/fstab'")
+    return parser
+
+
+def main():
+    args = argument_parser().parse_args()
+    print(path_to_nfs_url(args.path, args.fstab))
+
+
+if __name__ == "__main__":
+    main()

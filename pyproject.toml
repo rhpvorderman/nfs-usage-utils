@@ -28,6 +28,7 @@ urls.homepage = "https://github.com/rhpvorderman/nfs-usage-utils"
 
 [project.scripts]
 nfs-find = "nfs_usage_utils.find:main"
+nfs-path-to-url = "nfs_usage_utils.fstab:main"
 
 [tool.setuptools_scm]
 version_file = "src/nfs/_version.py"
