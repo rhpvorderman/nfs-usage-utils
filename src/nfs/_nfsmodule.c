@@ -32,10 +32,20 @@ static PyObject *
 nfs_error_to_python_error(int nfs_error) {
     /* See https://datatracker.ietf.org/doc/html/rfc7530#section-13 */
     switch (nfs_error) {
-        case NFS4ERR_ACCESS:
-            return PyExc_PermissionError;
+        case NFS4ERR_EXIST:
+            return PyExc_FileExistsError;
+        case NFS4ERR_ISDIR:
+            return PyExc_IsADirectoryError;
+        case NFS4ERR_NOTDIR:
+            return PyExc_NotADirectoryError;
         case NFS4ERR_NOENT:
             return PyExc_FileNotFoundError;
+        case NFS4ERR_ACCESS:
+        case NFS4ERR_PERM:
+            return PyExc_PermissionError;
+        case NFS4ERR_BADCHAR:
+        case NFS4ERR_NAMETOOLONG:
+            return PyExc_ValueError;
         default:
             return PyExc_OSError;
     }
