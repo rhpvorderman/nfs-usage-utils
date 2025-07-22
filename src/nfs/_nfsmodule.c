@@ -257,18 +257,36 @@ NFSDirEntry_from_dirpath_and_dirent(PyObject *dirpath, struct nfsdirent *dirent)
     if (name == NULL) {
         return NULL;
     }
-    Py_ssize_t dirpath_size = PyUnicode_GET_LENGTH(dirpath);
-    Py_UCS4 last_char = PyUnicode_READ_CHAR(dirpath, dirpath_size - 1);
+    Py_ssize_t dirpath_length = PyUnicode_GET_LENGTH(dirpath);
     PyObject *path;
-    if (last_char == '/') {
-        path = PyUnicode_Concat(dirpath, name);
+    if (PyUnicode_IS_COMPACT_ASCII(dirpath) && PyUnicode_IS_COMPACT_ASCII(name)) {
+        /* ASCII Path names are the most common so use an optimal code path. */
+        Py_ssize_t name_length = PyUnicode_GET_LENGTH(name);
+        char *dirpath_ptr = PyUnicode_DATA(dirpath);
+        char *name_ptr = PyUnicode_DATA(name);
+        if (dirpath_ptr[dirpath_length - 1] == '/') {
+            dirpath_length -= 1;
+        }
+        path = PyUnicode_New(dirpath_length + name_length + 1, 127);
+        if (path == NULL) {
+            return NULL;
+        }
+        char *path_ptr = PyUnicode_DATA(path);
+        memcpy(path_ptr, dirpath_ptr, dirpath_length);
+        path_ptr[dirpath_length] = '/';
+        memcpy(path_ptr + dirpath_length + 1, name_ptr, name_length);
     } else {
-        path = PyUnicode_FromFormat("%S/%S", dirpath, name);
-    }
+        Py_UCS4 last_char = PyUnicode_READ_CHAR(dirpath, dirpath_length - 1);
+        if (last_char == '/') {
+            path = PyUnicode_Concat(dirpath, name);
+        } else {
+            path = PyUnicode_FromFormat("%S/%S", dirpath, name);
+        }
+        if (path == NULL) {
+            return NULL;
+        }
+    }   
 
-    if (path == NULL) {
-        return NULL;
-    }
     self->name = name;
     self->path = path;
     self->inode = dirent->inode;
