@@ -66,6 +66,7 @@ NFSMount__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyErr_SetString(PyExc_RuntimeError, "Failed to create context");
         return NULL;
     }
+    nfs_set_version(self->context, NFS_V4);
     self->url = nfs_parse_url_dir(self->context, PyUnicode_AsUTF8(url));
     if (self->url == NULL) {
         PyErr_Format(PyExc_RuntimeError, "Failed to parse URL: %R", url);
@@ -509,21 +510,6 @@ PyInit__nfs(void)
     PyModule_AddIntMacro(m, NF4FIFO);
     PyModule_AddIntMacro(m, NF4ATTRDIR);
     PyModule_AddIntMacro(m, NF4NAMEDATTR);
-
-    PyModule_AddIntMacro(m, NF3REG);
-    PyModule_AddIntMacro(m, NF3DIR);
-    PyModule_AddIntMacro(m, NF3BLK);
-    PyModule_AddIntMacro(m, NF3CHR);
-    PyModule_AddIntMacro(m, NF3LNK);
-    PyModule_AddIntMacro(m, NF3SOCK);
-    PyModule_AddIntMacro(m, NF3FIFO);
-
-    PyModule_AddIntMacro(m, NF2NON);
-    PyModule_AddIntMacro(m, NF2REG);
-    PyModule_AddIntMacro(m, NF2DIR);
-    PyModule_AddIntMacro(m, NF2BLK);
-    PyModule_AddIntMacro(m, NF2CHR);
-    PyModule_AddIntMacro(m, NF2LNK);
 
     return m;
 }
