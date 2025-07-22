@@ -24,7 +24,6 @@ SOFTWARE.
 #include <Python.h>
 #include "structmember.h"
 
-#include <nfsc/libnfs-raw-nfs.h>
 #include <nfsc/libnfs-raw-nfs4.h>
 #include <nfsc/libnfs.h>
 
@@ -522,8 +521,7 @@ PyInit__nfs(void)
         return NULL;
     }
 
-    PyModule_AddIntMacro(m, NFS_V2);
-    PyModule_AddIntMacro(m, NFS_V3);
+
     PyModule_AddIntMacro(m, NFS_V4);
 
     PyModule_AddIntMacro(m, NF4REG);
