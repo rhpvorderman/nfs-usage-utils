@@ -21,30 +21,37 @@
 Simple utility to list all the files present on the NFS filesystem. As of yet
 no predicates are implemented.
 """
-
-import argparse
+import warnings
+from typing import Iterator
 
 import nfs
 
-from .nfscrawler import crawlnfs
 
-def find(nfs_mount: nfs.NFSMount, path: str = "/"):
-    for entry in crawlnfs(nfs_mount, path):
-        yield entry.path
-
-
-def argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument("URL")
-    return parser
-
-
-def main():
-    args = argument_parser().parse_args()
-    with nfs.NFSMount(args.URL) as m:
-        for path in find(m):
-            print(path)
+def crawlnfs_simple(nfs_mount: nfs.NFSMount, path: str = "/"
+                    ) -> Iterator[nfs.NFSDirEntry]:
+    try:
+        d = nfs.scandir(nfs_mount, path)
+    except OSError as e:
+        warnings.warn(str(e))
+        return
+    with d:
+        for entry in d:
+            yield entry
+            if entry.is_dir():
+                yield from crawlnfs_simple(nfs_mount, entry.path)
 
 
-if __name__ == "__main__":
-    main()
+def crawlnfs(nfs_mount: nfs.NFSMount, path: str = "/", threads: int = 0
+             ) -> Iterator[nfs.NFSDirEntry]:
+    """
+    Recursively crawl through the NFS mount at a given path (default '/').
+    Yield nfs.NFSDirEntry objects. Raises warnings on permission errors.
+    Threads indicate the number of worker threads that send the READDIR
+    request to the server and wait for its response. This happens outside the
+    GIL.
+    When threads is 0 all request to the server are made by the main thread.
+    """
+    if threads == 0:
+        return crawlnfs_simple(nfs_mount, path)
+    else:
+        raise NotImplementedError("Threads are not yet implemented.")

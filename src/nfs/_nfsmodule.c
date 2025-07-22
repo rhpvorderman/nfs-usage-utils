@@ -457,6 +457,7 @@ scandir(PyObject *module, PyObject *args, PyObject *kwargs)
     Py_END_ALLOW_THREADS
     if (ret < 0) {
         PyErr_SetString(PyExc_IOError, nfs_get_error(context));
+        return NULL;
     }
     iterator->nfs_mount = Py_NewRef(nfs_mount);
     iterator->context = context;
