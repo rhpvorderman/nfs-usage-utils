@@ -556,6 +556,7 @@ scandir_async_callback(
             sizeof(iterator->error_message) - 1
         );
     }
+    iterator->ready = 1;
 }
 
 static PyObject *scandir_impl(
@@ -602,8 +603,8 @@ static PyObject *scandir_impl(
         ret = nfs_opendir_async(context, path_ptr, scandir_async_callback, iterator);
         if (ret != 0) {
             PyErr_SetString(nfs_error_to_python_error(-ret), nfs_get_error(context));
+            return NULL;
         }
-        return NULL;
     } else {
         struct nfsdir *dirp = NULL;
         Py_BEGIN_ALLOW_THREADS

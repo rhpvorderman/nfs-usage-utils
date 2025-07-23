@@ -18,8 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-NFS_V2: int
-NFS_V3: int
+
 NFS_V4: int
 
 NF4REG: int
@@ -32,27 +31,16 @@ NF4FIFO: int
 NF4ATTRDIR: int
 NF4NAMEDATTR: int
 
-NF3REG: int
-NF3DIR: int
-NF3BLK: int
-NF3CHR: int
-NF3LNK: int
-NF3SOCK: int
-NF3FIFO: int
-
-NF2NON: int
-NF2REG: int
-NF2DIR: int
-NF2BLK: int
-NF2CHR: int
-NF2LNK: int
-
 
 class NFSMount:
     def __init__(self, url: str): ...
     def __enter__(self): ...
     def __exit__(self, *args): ...
     def close(self): ...
+    def service(self, revents: int) -> None: ...
+    def get_fd(self) -> int: ...
+    def which_events(self) -> int: ...
+    def queue_length(self) -> int: ...
 
 
 class NFSDirEntry:
@@ -85,6 +73,8 @@ class ScandirIterator():
     def __iter__(self) -> ScandirIterator: ...
     def __next__(self) -> NFSDirEntry: ...
     def close(self): ...
+    def ready(self) -> bool: ...
 
 
 def scandir(nfs_mount: NFSMount, path: str = "/") -> ScandirIterator: ...
+def scandir_async(nfs_mount: NFSMount, path: str = "/") -> ScandirIterator: ...
