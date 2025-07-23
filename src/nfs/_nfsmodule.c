@@ -123,10 +123,89 @@ NFSMount_exit(NFSMount *self, PyObject *args) {
     return NFSMount_close(self, args);
 }
 
+PyDoc_STRVAR(NFSMount_service__doc__,
+"service($self, revents, /)\n"
+"--\n"
+"\n"
+"Service the revents on the socket."
+"\n"
+"  revents\n"
+"    bitmask as reported by select.poll on the file descriptor.\n"
+);
+
+static PyObject *
+NFSMount_service(NFSMount *self, PyObject *args, PyObject *kwargs) 
+{
+    int revents = 0;
+    static char *format = "i|service";
+    static char *keywords[] = {"revents", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, format, keywords, &revents)) {
+        return NULL;
+    }
+    int ret = nfs_service(self->context, revents);
+    if (ret != 0) {
+        PyErr_SetString(
+            nfs_error_to_python_error(-ret), 
+            nfs_get_error(self->context)
+        );
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+PyDoc_STRVAR(NFSMount_get_fd__doc__,
+"get_fd($self, /)\n"
+"--\n"
+"\n"
+"Get the socket file descriptor for usage in select.poll\n"
+);
+
+static PyObject *
+NFSMount_get_fd(NFSMount *self, PyObject *args) 
+{
+    return PyLong_FromLong(nfs_get_fd(self->context));
+}
+
+PyDoc_STRVAR(NFSMount_which_events__doc__,
+"which_events($self, /)\n"
+"--\n"
+"\n"
+"Returns which events need polling.\n"
+"This is a combination of the POLLIN and POLLOUT flags.\n"
+);
+
+static PyObject *
+NFSMount_which_events(NFSMount *self, PyObject *args) 
+{
+    return PyLong_FromLong(nfs_which_events(self->context));
+}
+
+PyDoc_STRVAR(NFSMount_queue_length__doc__,
+"queue_length($self, /)\n"
+"--\n"
+"\n"
+"Returns the number of commands in-flight. Can be used by the application\n"
+"to check if there are any more responses awaiting for the server\n"
+"or if the connection is completely idle.\n"
+);
+
+static PyObject *
+NFSMount_queue_length(NFSMount *self, PyObject *args) 
+{
+    return PyLong_FromLong(nfs_queue_length(self->context));
+}
+
 static PyMethodDef NFSMount_methods[] = {
     {"close", (PyCFunction)NFSMount_close, METH_NOARGS, NULL},
     {"__enter__", (PyCFunction)NFSMount_enter, METH_NOARGS, NULL},
     {"__exit__", (PyCFunction)NFSMount_exit, METH_VARARGS, NULL},
+    {"service", (PyCFunction)NFSMount_service, METH_VARARGS | METH_KEYWORDS,
+     NFSMount_service__doc__},
+    {"get_fd", (PyCFunction)NFSMount_get_fd, METH_NOARGS, NFSMount_get_fd__doc__},
+    {"which_events", (PyCFunction)NFSMount_which_events, METH_NOARGS, 
+     NFSMount_which_events__doc__},
+    {"queue_length", (PyCFunction)NFSMount_queue_length, METH_NOARGS, 
+     NFSMount_queue_length__doc__},
     {NULL},
 };
 
@@ -414,10 +493,37 @@ ScandirIterator_exit(ScandirIterator *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+PyDoc_STRVAR(ScandirIterator_ready__doc__, 
+"ready($self, /)\n"
+"--\n"
+"\n"
+"When called with scandir_async, check if the iterator is ready. Non-async\n"
+"iterators are always ready. When an error was raised by the server calling\n"
+"this function will raise that error."
+);
+
+static PyObject *
+ScandirIterator_ready(ScandirIterator *self, PyObject *args)
+{
+    if (!self->ready) {
+        Py_RETURN_FALSE;
+    }
+    if (self->return_code != 0) {
+        PyErr_SetString(
+            nfs_error_to_python_error(-self->return_code),
+            self->error_message
+        );
+        return NULL;
+    }
+    Py_RETURN_TRUE;
+}
+
 static PyMethodDef ScandirIterator_methods[] = {
     {"__enter__", (PyCFunction)ScandirIterator_enter, METH_NOARGS},
     {"__exit__", (PyCFunction)ScandirIterator_exit, METH_VARARGS},
     {"close", (PyCFunction)ScandirIterator_close, METH_NOARGS},
+    {"ready", (PyCFunction)ScandirIterator_ready, METH_NOARGS,
+     ScandirIterator_ready__doc__},
     {NULL}
 };
 
