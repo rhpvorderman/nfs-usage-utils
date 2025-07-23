@@ -332,10 +332,13 @@ NFSDirEntry_from_dirpath_and_dirent(PyObject *dirpath, struct nfsdirent *dirent)
 
 typedef struct ScandirIterator_struct {
     PyObject_HEAD
+    int ready;
+    int return_code;
     PyObject *nfs_mount;
     PyObject *path;
     struct nfs_context *context;
     struct nfsdir *dirp;
+    char error_message[512];
 } ScandirIterator;
 
 static void
@@ -430,19 +433,27 @@ static PyTypeObject ScandirIterator_Type = {
     .tp_methods = ScandirIterator_methods,
 };
 
-PyDoc_STRVAR(_nfs_scandir__doc__,
-"scandir($module, nfs_mount, /, path=None)\n"
-"--\n"
-"\n"
-"Return an iterator of NfsDirEntry objects for given path on given nfs_mount.\n"
-"\n"
-"nfs_mount must be an initialized, unclosed NFSMount object."
-"path can be specified as either str, or a path-like object.\n"
-"\n"
-"If path is None, uses the path=\'/\'.");
+static void 
+scandir_async_callback(
+    int status, struct nfs_context *context, void *data, void *private_data)
+{
+    ScandirIterator *iterator = (ScandirIterator *)private_data;
+    struct nfsdir *dirp = (struct nfsdir *)data;
+    iterator->return_code = status;
+    iterator->dirp = dirp;
+    if (status != 0) {
+        strncpy(
+            iterator->error_message, 
+            nfs_get_error(context), 
+            // -1 because error message is 0 initialized and this way there is
+            // always a terminating 0.
+            sizeof(iterator->error_message) - 1
+        );
+    }
+}
 
-static PyObject *
-scandir(PyObject *module, PyObject *args, PyObject *kwargs) 
+static PyObject *scandir_impl(
+    PyObject *module, PyObject *args, PyObject *kwargs, int async)
 {
     PyObject *nfs_mount = NULL;
     PyObject *path_in = NULL; 
@@ -472,26 +483,78 @@ scandir(PyObject *module, PyObject *args, PyObject *kwargs)
         return NULL;
     }
     struct nfs_context *context = ((NFSMount *)nfs_mount)->context;
-    struct nfsdir *dirp = NULL;
+    iterator->nfs_mount = Py_NewRef(nfs_mount);
+    iterator->dirp = NULL;
+    memset(iterator->error_message, 0, sizeof(iterator->error_message));
+    iterator->ready = 0;
+    iterator->return_code = 0;
+    iterator->path = path;
+    iterator->context = context;
     const char *path_ptr = PyUnicode_AsUTF8(path);
     int ret;
-    Py_BEGIN_ALLOW_THREADS
-    ret = nfs_opendir(context, path_ptr, &dirp);
-    Py_END_ALLOW_THREADS
-    if (ret < 0) {
-        PyErr_SetString(nfs_error_to_python_error(-ret), nfs_get_error(context));
+    if (async) {
+        ret = nfs_opendir_async(context, path_ptr, scandir_async_callback, iterator);
+        if (ret != 0) {
+            PyErr_SetString(nfs_error_to_python_error(-ret), nfs_get_error(context));
+        }
         return NULL;
+    } else {
+        struct nfsdir *dirp = NULL;
+        Py_BEGIN_ALLOW_THREADS
+        ret = nfs_opendir(context, path_ptr, &dirp);
+        Py_END_ALLOW_THREADS
+        if (ret < 0) {
+            PyErr_SetString(nfs_error_to_python_error(-ret), nfs_get_error(context));
+            return NULL;
+        }
+        iterator->dirp = dirp;
+        iterator->return_code = ret;
+        iterator->ready = 1;
     }
-    iterator->nfs_mount = Py_NewRef(nfs_mount);
-    iterator->context = context;
-    iterator->path = path;
-    iterator->dirp = dirp;
     return (PyObject *)iterator;
 }
 
+PyDoc_STRVAR(_nfs_scandir__doc__,
+"scandir($module, nfs_mount, /, path=None)\n"
+"--\n"
+"\n"
+"Return an iterator of NfsDirEntry objects for given path on given nfs_mount.\n"
+"\n"
+"nfs_mount must be an initialized, unclosed NFSMount object."
+"path can be specified as either str, or a path-like object.\n"
+"\n"
+"If path is None, uses the path=\'/\'.");
+
+static PyObject *
+scandir(PyObject *module, PyObject *args, PyObject *kwargs) 
+{
+    return scandir_impl(module, args, kwargs, 0);
+}
+
+
+PyDoc_STRVAR(_nfs_scandir_async__doc__,
+"scandir_ascync($module, nfs_mount, /, path=None)\n"
+"--\n"
+"\n"
+"Return an iterator of NfsDirEntry objects for given path on given nfs_mount.\n"
+"The NFSMount object must be serviced using the service_nfs_mount function \n"
+"before the iterator becomes usable."
+"\n"
+"nfs_mount must be an initialized, unclosed NFSMount object."
+"path can be specified as either str, or a path-like object.\n"
+"\n"
+"If path is None, uses the path=\'/\'.");
+
+static PyObject *
+scandir_async(PyObject *module, PyObject *args, PyObject *kwargs) 
+{
+    return scandir_impl(module, args, kwargs, 1);
+}
 static PyMethodDef _nfs_methods[] = {
     {"scandir", (PyCFunction)scandir, METH_VARARGS | METH_KEYWORDS, 
      _nfs_scandir__doc__},
+    {"scandir_async", (PyCFunction)scandir_async, METH_VARARGS | METH_KEYWORDS, 
+     _nfs_scandir_async__doc__},
     {NULL},
 };
 
