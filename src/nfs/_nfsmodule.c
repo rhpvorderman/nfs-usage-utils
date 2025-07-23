@@ -134,14 +134,17 @@ PyDoc_STRVAR(NFSMount_service__doc__,
 );
 
 static PyObject *
-NFSMount_service(NFSMount *self, PyObject *args, PyObject *kwargs) 
+NFSMount_service(NFSMount *self, PyObject *revents_obj)
 {
-    int revents = 0;
-    static char *format = "i|service";
-    static char *keywords[] = {"revents", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, format, keywords, &revents)) {
+    if (!PyLong_CheckExact(revents_obj)) {
+        PyErr_Format(
+            PyExc_TypeError,
+            "revents should be an int object, got %s", 
+            Py_TYPE(revents_obj)->tp_name
+        );
         return NULL;
     }
+    int revents = PyLong_AsLong(revents_obj);
     int ret = nfs_service(self->context, revents);
     if (ret != 0) {
         PyErr_SetString(
@@ -199,7 +202,7 @@ static PyMethodDef NFSMount_methods[] = {
     {"close", (PyCFunction)NFSMount_close, METH_NOARGS, NULL},
     {"__enter__", (PyCFunction)NFSMount_enter, METH_NOARGS, NULL},
     {"__exit__", (PyCFunction)NFSMount_exit, METH_VARARGS, NULL},
-    {"service", (PyCFunction)NFSMount_service, METH_VARARGS | METH_KEYWORDS,
+    {"service", (PyCFunction)NFSMount_service, METH_O,
      NFSMount_service__doc__},
     {"get_fd", (PyCFunction)NFSMount_get_fd, METH_NOARGS, NFSMount_get_fd__doc__},
     {"which_events", (PyCFunction)NFSMount_which_events, METH_NOARGS, 
