@@ -24,6 +24,7 @@ no predicates are implemented.
 
 import argparse
 import os
+from typing import Callable, List
 
 import nfs
 
@@ -31,8 +32,13 @@ from .fstab import path_to_nfs_url
 from .nfscrawler import crawlnfs
 
 
-def find(nfs_mount: nfs.NFSMount, async_connections: int = 0):
+def find(
+        nfs_mount: nfs.NFSMount,
+        predicates: List[Callable[[nfs.NFSDirEntry], bool]],
+        async_connections: int = 1):
     for entry in crawlnfs(nfs_mount, async_connections=async_connections):
+        if not all(map(lambda func: func(entry), predicates)):
+            continue
         yield entry.path
 
 
@@ -54,7 +60,7 @@ def main():
         prefix = path
         url = path_to_nfs_url(path, args.fstab)
     with nfs.NFSMount(url) as nfs_mount:
-        for path in find(nfs_mount, async_connections=args.connections):
+        for path in find(nfs_mount, [], async_connections=args.connections):
             new_path = os.path.normpath(f"{prefix}/{path}")
             print(new_path)
 

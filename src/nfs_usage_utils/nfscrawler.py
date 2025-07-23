@@ -46,7 +46,8 @@ def crawlnfs_simple(nfs_mount: nfs.NFSMount, path: str = "/"
 def crawlnfs_async(
     nfs_mount: nfs.NFSMount,
     path: str ="/",
-    async_connections: int = 1
+    async_connections: int = 1,
+    timeout_millisecs: int = 5000,
 ) -> Iterator[nfs.NFSDirEntry]:
     todo_dirs = [path]
     requested_dirs: List[Optional[nfs.ScandirIterator]] = [
@@ -65,14 +66,13 @@ def crawlnfs_async(
         fd = nfs_mount.get_fd()
         events = nfs_mount.which_events()
         poller.register(fd, events)
-        if nfs_mount.queue_length():
-            finished_polls = poller.poll()
-            if len(finished_polls) > 1:
-                raise RuntimeError(f"Only one poll was registered, what is going on? {finished_polls}")
-            if not finished_polls:
-                continue
-            fd, revents = finished_polls[0]
-            nfs_mount.service(revents)
+        finished_polls = poller.poll(timeout_millisecs)
+        if not finished_polls:
+            raise TimeoutError("Timed out while waiting for connection.")
+        if len(finished_polls) != 1:
+            raise RuntimeError(f"Only one poll was registered, what is going on? {finished_polls}")
+        fd, revents = finished_polls[0]
+        nfs_mount.service(revents)
 
         # Check which of the dirobjects are ready
         ready_dirs: List[nfs.ScandirIterator] = []
