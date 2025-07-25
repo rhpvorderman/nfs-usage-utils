@@ -29,10 +29,10 @@ from .nfscrawler import crawlnfs
 
 
 def find(
-        nfs_mount: nfs.NFSMount,
+        nfs_url: str,
         predicates: List[Callable[[nfs.NFSDirEntry], bool]],
         async_connections: int = 1):
-    for entry in crawlnfs(nfs_mount, async_connections=async_connections):
+    for entry in crawlnfs(nfs_url, async_connections=async_connections):
         if not all(map(lambda func: func(entry), predicates)):
             continue
         yield entry.path
@@ -55,10 +55,10 @@ def main():
     else:
         prefix = path
         url = path_to_nfs_url(path, args.fstab)
-    with nfs.NFSMount(url) as nfs_mount:
-        for path in find(nfs_mount, [], async_connections=args.connections):
-            new_path = os.path.normpath(f"{prefix}/{path}")
-            print(new_path)
+
+    for path in find(url, [], async_connections=args.connections):
+        new_path = os.path.normpath(f"{prefix}/{path}")
+        print(new_path)
 
 
 if __name__ == "__main__":
