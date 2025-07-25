@@ -48,19 +48,29 @@ class MultiThreadedAsyncReaddir:
         self.nfs_mounts = [nfs.NFSMount(nfs_url) for _ in range(async_connections)]
         self.input_queues: List[queue.Queue[str]] = [queue.Queue() for _ in range(async_connections)]
         self.output_queue: queue.Queue[Union[nfs.ScandirIterator, Exception]] = queue.Queue(maxsize=async_connections * 3)
+        self.running = True
+        self.index = 0
         self.workers = [
-            threading.Thread(target=self.worker, args=(mount, queue, timeout_millisecs))
-            for mount in self.nfs_mounts
+            threading.Thread(target=self.worker, args=(mount, q, timeout_millisecs))
+            for mount, q in zip(self.nfs_mounts, self.input_queues)
         ]
         for worker in self.workers:
             worker.start()
-        self.running = True
-        self.index = 0
 
     def put(self, path: str):
         self.input_queues[self.index].put(path)
         self.index += 1
         self.index %= len(self.input_queues)
+
+    def get(self):
+        return self.output_queue.get()
+
+    def stop(self):
+        for q in self.input_queues:
+            q.join()
+        self.running = False
+        for worker in self.workers:
+            worker.join()
 
     def worker(self, nfs_mount, input_queue: queue.Queue[str] , timeout_millisecs):
         poller = select.poll()
@@ -70,25 +80,27 @@ class MultiThreadedAsyncReaddir:
                     path = input_queue.get(timeout=0.001)
                 except queue.Empty:
                     continue
+                result = None
                 dir = nfs.scandir_async(nfs_mount, path)
                 ready = False
                 while not ready:
                     fd = nfs_mount.get_fd()
                     events = nfs_mount.which_events()
                     poller.register(fd, events)
-                    poll_results = poller.poll(timeout=timeout_millisecs)
+                    poll_results = poller.poll(timeout_millisecs)
                     if len(poll_results) == 0:
-                        self.output_queue.put(
-                            TimeoutError(
-                                f"Timeout while requesting {path}")
-                        )
-                        continue
+                        result =  TimeoutError(
+                            f"Timeout while requesting {path}")
+                        break
                     try:
                         ready = dir.ready()
                     except Exception as e:
-                        self.output_queue.put(e)
+                        result = e
                         break
-                self.output_queue.put(dir)
+                if result is None:
+                    result = dir
+                self.output_queue.put(result)
+                input_queue.task_done()
 
 
 def crawl_nfs_async_threaded(
@@ -97,7 +109,20 @@ def crawl_nfs_async_threaded(
     async_connections: int = 1,
     timeout_millisecs: int = 5000,
 ) -> Iterator[nfs.NFSDirEntry]:
-    pass
+    readdir_queue =  MultiThreadedAsyncReaddir(nfs_url, async_connections, timeout_millisecs)
+    readdir_queue.put(path)
+    directories_put = 1
+    directories_got = 0
+    while(directories_put - directories_got):
+        print(directories_put, directories_got)
+        with readdir_queue.get() as dir:
+            directories_got += 1
+            for entry in dir:  # type: nfs.NFSDirEntry
+                yield entry
+                if entry.is_dir():
+                    readdir_queue.put(entry.path)
+                    directories_put += 1
+    readdir_queue.stop()
 
 
 def crawlnfs_async(
@@ -179,4 +204,4 @@ def crawlnfs(nfs_url: str, path: str = "/", async_connections: int = 1
         with nfs.NFSMount(nfs_url) as nfs_mount:
             return crawlnfs_simple(nfs_mount, path)
     else:
-        return crawlnfs_async(nfs_url, path, async_connections)
+        return crawl_nfs_async_threaded(nfs_url, path, async_connections)
