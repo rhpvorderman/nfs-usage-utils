@@ -141,7 +141,10 @@ NFSMount_service(NFSMount *self, PyObject *revents_obj)
         return NULL;
     }
     int revents = PyLong_AsLong(revents_obj);
-    int ret = nfs_service(self->context, revents);
+    int ret;
+    Py_BEGIN_ALLOW_THREADS
+    ret = nfs_service(self->context, revents);
+    Py_END_ALLOW_THREADS;
     if (ret != 0) {
         PyErr_SetString(
             nfs_error_to_python_error(-ret), 
