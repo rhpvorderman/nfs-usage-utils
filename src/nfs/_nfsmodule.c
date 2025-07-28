@@ -90,6 +90,8 @@ NFSMount__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyErr_Format(PyExc_ValueError, "Invalid URL: %R", url);
         return NULL;
     } 
+
+    nfs_set_readahead(self->context, 4 * 1024 * 1024);
     
     int ret = nfs_mount(self->context, self->url->server, self->url->path);
     if (ret != 0) {
