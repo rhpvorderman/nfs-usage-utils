@@ -18,6 +18,7 @@ Simple utility to list all the files present on the NFS filesystem. As of yet
 no predicates are implemented.
 """
 import select
+import sys
 import warnings
 from typing import Iterator, List, Optional
 
@@ -59,6 +60,7 @@ def crawlnfs_async(
                 requested_dirs[i] = request
 
         # Wait for some requests to finish
+        print(nfs_mount.queue_length(), file=sys.stderr)
         fd = nfs_mount.get_fd()
         events = nfs_mount.which_events()
         poller.register(fd, events)
