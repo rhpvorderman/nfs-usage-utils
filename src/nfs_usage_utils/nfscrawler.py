@@ -71,6 +71,7 @@ def crawlnfs_async(
             raise RuntimeError(f"Only one poll was registered, what is going on? {finished_polls}")
         fd, revents = finished_polls[0]
         nfs_mount.service(revents)
+        print(nfs_mount.queue_length(), file=sys.stderr)
 
         # Check which of the dirobjects are ready
         ready_dirs: List[nfs.ScandirIterator] = []
