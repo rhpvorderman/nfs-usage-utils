@@ -60,7 +60,7 @@ def crawlnfs_async(
                 requested_dirs[i] = request
 
         # Wait for some requests to finish
-        print(nfs_mount.queue_length(), file=sys.stderr)
+        print(f"before: {nfs_mount.queue_length()}", file=sys.stderr)
         fd = nfs_mount.get_fd()
         events = nfs_mount.which_events()
         poller.register(fd, events)
@@ -71,7 +71,7 @@ def crawlnfs_async(
             raise RuntimeError(f"Only one poll was registered, what is going on? {finished_polls}")
         fd, revents = finished_polls[0]
         nfs_mount.service(revents)
-        print(nfs_mount.queue_length(), file=sys.stderr)
+        print(f"after: {nfs_mount.queue_length()}", file=sys.stderr)
 
         # Check which of the dirobjects are ready
         ready_dirs: List[nfs.ScandirIterator] = []
