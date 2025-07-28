@@ -165,6 +165,19 @@ NFSMount_get_fd(NFSMount *self, PyObject *args)
     return PyLong_FromLong(nfs_get_fd(self->context));
 }
 
+PyDoc_STRVAR(NFSMount_get_timeout__doc__,
+"get_timeout($self, /)\n"
+"--\n"
+"\n"
+"Get the recommended poll timeout for usage in select.poll\n"
+);
+
+static PyObject *
+NFSMount_get_timeout(NFSMount *self, PyObject *args) 
+{
+    return PyLong_FromLong(nfs_get_timeout(self->context));
+}
+
 PyDoc_STRVAR(NFSMount_which_events__doc__,
 "which_events($self, /)\n"
 "--\n"
@@ -201,6 +214,8 @@ static PyMethodDef NFSMount_methods[] = {
     {"service", (PyCFunction)NFSMount_service, METH_O,
      NFSMount_service__doc__},
     {"get_fd", (PyCFunction)NFSMount_get_fd, METH_NOARGS, NFSMount_get_fd__doc__},
+    {"get_timeout", (PyCFunction)NFSMount_get_timeout, METH_NOARGS, 
+     NFSMount_get_timeout__doc__},
     {"which_events", (PyCFunction)NFSMount_which_events, METH_NOARGS, 
      NFSMount_which_events__doc__},
     {"queue_length", (PyCFunction)NFSMount_queue_length, METH_NOARGS, 

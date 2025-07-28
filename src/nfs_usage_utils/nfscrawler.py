@@ -62,7 +62,7 @@ def crawlnfs_async(
         fd = nfs_mount.get_fd()
         events = nfs_mount.which_events()
         poller.register(fd, events)
-        finished_polls = poller.poll(timeout_millisecs)
+        finished_polls = poller.poll(nfs_mount.get_timeout())
         if not finished_polls:
             raise TimeoutError("Timed out while waiting for connection.")
         if len(finished_polls) != 1:
