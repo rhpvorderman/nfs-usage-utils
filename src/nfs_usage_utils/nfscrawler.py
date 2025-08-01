@@ -21,8 +21,9 @@ import select
 import warnings
 from typing import Dict, Iterator, List
 
-
 import nfs
+
+DEFAULT_MAX_REQUESTS = 10_000
 
 
 def crawlnfs_simple(nfs_mount: nfs.NFSMount, path: str = "/"
@@ -42,12 +43,18 @@ def crawlnfs_simple(nfs_mount: nfs.NFSMount, path: str = "/"
 def crawlnfs_async(
     nfs_mount: nfs.NFSMount,
     path: str ="/",
+    max_requests: int = DEFAULT_MAX_REQUESTS,
 ) -> Iterator[nfs.NFSDirEntry]:
-    request_dir = nfs.scandir_async(nfs_mount, path)
-    requested_dirs: Dict[str, nfs.ScandirIterator] = {path: request_dir}
+    if max_requests < 1:
+        raise ValueError("max_requests should be 1 or higher")
+    todo_dirs = [path]
+    requested_dirs: Dict[str, nfs.ScandirIterator] = {}
 
     poller = select.poll()
-    while requested_dirs:
+    while requested_dirs or todo_dirs:
+        while todo_dirs and len(requested_dirs) < max_requests:
+            p = todo_dirs.pop()
+            requested_dirs[p] = nfs.scandir_async(nfs_mount, p)
         # Wait for some requests to finish
         fd = nfs_mount.get_fd()
         events = nfs_mount.which_events()
@@ -81,10 +88,14 @@ def crawlnfs_async(
                 for entry in dir:  # type: nfs.NFSDirEntry
                     yield entry
                     if entry.is_dir():
-                        requested_dirs[entry.path] = nfs.scandir_async(nfs_mount, entry.path)
+                        if len(requested_dirs) < max_requests:
+                            requested_dirs[entry.path] = nfs.scandir_async(
+                                nfs_mount, entry.path)
+                        else:
+                            todo_dirs.append(entry.path)
 
-
-def crawlnfs(nfs_mount: nfs.NFSMount, path: str = "/", async_connections: int = 1
+def crawlnfs(nfs_mount: nfs.NFSMount, path: str = "/",
+             max_requests: int = DEFAULT_MAX_REQUESTS,
              ) -> Iterator[nfs.NFSDirEntry]:
     """
     Recursively crawl through the NFS mount at a given path (default '/').
@@ -94,4 +105,4 @@ def crawlnfs(nfs_mount: nfs.NFSMount, path: str = "/", async_connections: int = 
     GIL.
     When threads is 0 all request to the server are made by the main thread.
     """
-    return crawlnfs_async(nfs_mount, path)
+    return crawlnfs_async(nfs_mount, path, max_requests)
