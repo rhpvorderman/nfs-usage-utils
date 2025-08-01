@@ -1,0 +1,3 @@
+[submodule "src/libnfs"]
+	path = src/libnfs
+	url = https://github.com/sahlberg/libnfs
