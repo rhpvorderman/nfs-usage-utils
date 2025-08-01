@@ -19,7 +19,7 @@ no predicates are implemented.
 """
 import select
 import warnings
-from typing import Iterator, List, Optional
+from typing import Dict, Iterator, List
 
 
 import nfs
@@ -42,22 +42,12 @@ def crawlnfs_simple(nfs_mount: nfs.NFSMount, path: str = "/"
 def crawlnfs_async(
     nfs_mount: nfs.NFSMount,
     path: str ="/",
-    async_connections: int = 1,
-    timeout_millisecs: int = 5000,
 ) -> Iterator[nfs.NFSDirEntry]:
-    todo_dirs = [path]
-    requested_dirs: List[Optional[nfs.ScandirIterator]] = [
-        None for _ in range(async_connections)]
+    request_dir = nfs.scandir_async(nfs_mount, path)
+    requested_dirs: Dict[str, nfs.ScandirIterator] = {path: request_dir}
 
     poller = select.poll()
-    while todo_dirs or any(requested_dirs):
-        # Check which slots are empty and fill them with requests
-        for i, dirobj in enumerate(requested_dirs):
-            if todo_dirs and dirobj is None:
-                dirpath = todo_dirs.pop()
-                request = nfs.scandir_async(nfs_mount, dirpath)
-                requested_dirs[i] = request
-
+    while requested_dirs:
         # Wait for some requests to finish
         fd = nfs_mount.get_fd()
         events = nfs_mount.which_events()
@@ -72,19 +62,18 @@ def crawlnfs_async(
 
         # Check which of the dirobjects are ready
         ready_dirs: List[nfs.ScandirIterator] = []
-        for i, dirobj in enumerate(requested_dirs):
-            if dirobj is None:
-                continue
+        to_remove_paths: List[str] = []
+        for path, dirobj in requested_dirs.items():
             try:
-                ready = dirobj.ready()
+                if dirobj.ready():
+                    ready_dirs.append(dirobj)
+                    to_remove_paths.append(path)
             except OSError as e:
                 warnings.warn(f"{type(e).__name__}: {e}")
-                requested_dirs[i] = None
+                to_remove_paths.append(path)
                 continue
-            if not ready:
-                continue
-            requested_dirs[i] = None
-            ready_dirs.append(dirobj)
+        for path in to_remove_paths:
+            del requested_dirs[path]
 
         # Iterate over all the ready dirs
         for dir in ready_dirs:
@@ -92,7 +81,7 @@ def crawlnfs_async(
                 for entry in dir:  # type: nfs.NFSDirEntry
                     yield entry
                     if entry.is_dir():
-                        todo_dirs.append(entry.path)
+                        requested_dirs[entry.path] = nfs.scandir_async(nfs_mount, entry.path)
 
 
 def crawlnfs(nfs_mount: nfs.NFSMount, path: str = "/", async_connections: int = 1
@@ -105,7 +94,4 @@ def crawlnfs(nfs_mount: nfs.NFSMount, path: str = "/", async_connections: int = 
     GIL.
     When threads is 0 all request to the server are made by the main thread.
     """
-    if async_connections == 1:
-        return crawlnfs_simple(nfs_mount, path)
-    else:
-        return crawlnfs_async(nfs_mount, path, async_connections)
+    return crawlnfs_async(nfs_mount, path)
