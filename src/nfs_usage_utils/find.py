@@ -24,7 +24,7 @@ from typing import Callable, List
 
 from . import _nfs as nfs
 
-from .fstab import path_to_nfs_url
+from .common_arguments import add_common_arguments, nfs_url_and_prefix_from_args
 from .nfscrawler import DEFAULT_MAX_REQUESTS, crawlnfs
 
 
@@ -40,22 +40,13 @@ def find(
 
 def argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument("path", help="Path or URL")
-    parser.add_argument("--fstab", default="/etc/fstab")
-    parser.add_argument("--max-requests", type=int,
-                        default=DEFAULT_MAX_REQUESTS)
+    add_common_arguments(parser)
     return parser
 
 
 def main():
     args = argument_parser().parse_args()
-    path = args.path
-    if path.startswith("nfs://"):
-        prefix = "/"
-        url = path
-    else:
-        prefix = path
-        url = path_to_nfs_url(path, args.fstab)
+    url, prefix = nfs_url_and_prefix_from_args(args)
     with nfs.NFSMount(url) as nfs_mount:
         for path in find(nfs_mount, [], max_requests=args.max_requests):
             new_path = os.path.normpath(f"{prefix}/{path}")
