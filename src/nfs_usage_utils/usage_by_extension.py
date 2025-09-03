@@ -30,7 +30,7 @@ def main():
     compressed_exts = ("gz", "bz2", "xz")
     size_by_extension = defaultdict(lambda: 0)
     url, prefix = nfs_url_and_prefix_from_args(args)
-    with nfs.NFSMount(url) as nfs_mount:
+    with nfs.NFSMount(url, hash_size=args.max_requests // 10) as nfs_mount:
         for entry in crawlnfs(nfs_mount, max_requests=args.max_requests):
             if not entry.is_file():
                 continue

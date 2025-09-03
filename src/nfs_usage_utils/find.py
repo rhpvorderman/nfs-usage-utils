@@ -47,7 +47,7 @@ def argument_parser() -> argparse.ArgumentParser:
 def main():
     args = argument_parser().parse_args()
     url, prefix = nfs_url_and_prefix_from_args(args)
-    with nfs.NFSMount(url) as nfs_mount:
+    with nfs.NFSMount(url, hash_size=args.max_requests // 10) as nfs_mount:
         for path in find(nfs_mount, [], max_requests=args.max_requests):
             new_path = os.path.normpath(f"{prefix}/{path}")
             print(new_path)

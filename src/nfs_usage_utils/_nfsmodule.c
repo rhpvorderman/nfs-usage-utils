@@ -68,11 +68,12 @@ static PyObject *
 NFSMount__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs) 
 {
     PyObject *url = NULL;
-    static char *format = "U|:NFSMount.__new__";
-    static char *keywords[] = {"url", NULL};
+    int hash_size = 0;
+    static char *format = "U|i:NFSMount.__new__";
+    static char *keywords[] = {"url", "hash_size", NULL};
     if (!PyArg_ParseTupleAndKeywords(
         args, kwargs, format, keywords,
-        &url)) {
+        &url, &hash_size)) {
             return NULL;
         }
 
@@ -85,6 +86,12 @@ NFSMount__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         return NULL;
     }
     nfs_set_version(self->context, NFS_V4);
+    if (hash_size) {
+        int ret = nfs_set_hash_size(self->context, hash_size);
+        if (ret != 0) {
+            PyErr_SetString(nfs_error_to_python_error(-ret), nfs_get_error(self->context));
+        }
+    }
     self->url = nfs_parse_url_dir(self->context, PyUnicode_AsUTF8(url));
     if (self->url == NULL) {
         PyErr_Format(PyExc_ValueError, "Invalid URL: %R", url);
