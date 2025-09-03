@@ -23,7 +23,7 @@ from typing import Dict, Iterator, List
 
 from . import _nfs as nfs
 
-DEFAULT_MAX_REQUESTS = 10_000
+DEFAULT_MAX_REQUESTS = 500
 
 
 def crawlnfs_simple(nfs_mount: nfs.NFSMount, path: str = "/"
