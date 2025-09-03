@@ -21,7 +21,7 @@ import select
 import warnings
 from typing import Dict, Iterator, List
 
-import nfs
+from . import _nfs as nfs
 
 DEFAULT_MAX_REQUESTS = 10_000
 

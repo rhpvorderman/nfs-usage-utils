@@ -22,7 +22,7 @@ import argparse
 import os
 from typing import Callable, List
 
-import nfs
+from . import _nfs as nfs
 
 from .fstab import path_to_nfs_url
 from .nfscrawler import DEFAULT_MAX_REQUESTS, crawlnfs

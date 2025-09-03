@@ -81,7 +81,7 @@ def build_libnfs():
 setup(
     ext_modules=[
         Extension(
-            "nfs._nfs", ["src/nfs/_nfsmodule.c"]),
+            "nfs_usage_utils._nfs", ["src/nfs_usage_utils/_nfsmodule.c"]),
     ],
     cmdclass = {"build_ext": BuildNFSExt},
 )

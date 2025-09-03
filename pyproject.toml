@@ -31,10 +31,10 @@ nfs-find = "nfs_usage_utils.find:main"
 nfs-path-to-url = "nfs_usage_utils.fstab:main"
 
 [tool.setuptools_scm]
-version_file = "src/nfs/_version.py"
+version_file = "src/nfs_usage_utils/_version.py"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-nfs = ['*.pyi', 'py.typed']
+nfs_usage_utils = ['*.pyi', 'py.typed']
