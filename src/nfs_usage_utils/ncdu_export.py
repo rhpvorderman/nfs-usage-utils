@@ -17,15 +17,45 @@
 """
 Utility to create a ncdu.json file from an export
 """
+import dataclasses
+import json
+from typing import Dict, List, Optional, Union
+
 from . import _nfs
 
-class Entry:
-    fs_path: str
-    nfs_path: str
+# See https://dev.yorhel.nl/ncdu/jsonfmt
+
+class Info:
+    name: str
+    asize: int = 0
+    dsize: int = 0
+    ino: int = 0
+    nlink: int = 0
+    dev: int = 0
+    read_error: bool = False
+    not_reg: bool = False
+    excluded: str = ""
+    children: Optional[List] = None
+
+    __slots__ = ("name", "asize", "dsize", "ino", "nlink", "dev", "read_error", "not_reg", "excluded", "children")
 
 
-class Directory:
-    def __init__(self, nfs_mount: _nfs.NFSMount, nfs_path, fs_path):
-        self._dir = _nfs.scandir(nfs_mount, nfs_path)
-        self.fs_path = fs_path
-        self.nfs_path = nfs_path
+    def to_json_repr(self, parent_dev: int = 0) -> str:
+        answer: Dict[str, Union[int, str, bool]] = {"name": self.name}
+        if self.asize:
+            answer["asize"] = self.asize
+        if self.dsize:
+            answer["dsize"] = self.dsize
+        if parent_dev != self.dev:
+            answer["dev"] = self.dev
+        if self.nlink > 1:
+            answer["ino"] = self.ino
+            answer["nlink"] = self.nlink
+            answer["hlnkc"] = True
+        if self.read_error:
+            answer["read_error"] = True
+        if self.not_reg:
+            answer["not_reg"] = True
+
+        return json.dumps(answer)
+
