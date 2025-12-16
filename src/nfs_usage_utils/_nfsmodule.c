@@ -429,8 +429,18 @@ NFSDirEntry_from_dirpath_and_dirent(PyObject *dirpath, struct nfsdirent *dirent)
     return (PyObject *)self;
 }
 
+PyDoc_STRVAR(_nfs_stat__doc__,
+"stat($module, nfs_mount, /, path=None)\n"
+"--\n"
+"\n"
+"Return a NFSDirEntry object for given path.\n"
+"\n"
+"nfs_mount must be an initialized, unclosed NFSMount object."
+"path can be specified as either str, or a path-like object.\n"
+"\n"
+"If path is None, uses the path=\'/\'.");
 PyObject *
-stat_impl(PyObject *module, PyObject *args, PyObject *kwargs)
+_nfs_stat(PyObject *module, PyObject *args, PyObject *kwargs)
 {
     PyObject *nfs_mount = NULL;
     PyObject *path_in = NULL; 
@@ -773,6 +783,8 @@ static PyMethodDef _nfs_methods[] = {
      _nfs_scandir__doc__},
     {"scandir_async", (PyCFunction)scandir_async, METH_VARARGS | METH_KEYWORDS, 
      _nfs_scandir_async__doc__},
+    {"stat", (PyCFunction)_nfs_stat, METH_VARARGS | METH_KEYWORDS, 
+     _nfs_stat__doc__},
     {NULL},
 };
 
