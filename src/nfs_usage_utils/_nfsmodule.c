@@ -439,7 +439,7 @@ PyDoc_STRVAR(_nfs_stat__doc__,
 "path can be specified as either str, or a path-like object.\n"
 "\n"
 "If path is None, uses the path=\'/\'.");
-PyObject *
+static PyObject *
 _nfs_stat(PyObject *module, PyObject *args, PyObject *kwargs)
 {
     PyObject *nfs_mount = NULL;
