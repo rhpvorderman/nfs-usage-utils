@@ -525,7 +525,6 @@ _nfs_stat(PyObject *module, PyObject *args, PyObject *kwargs)
     else {
         PyErr_SetString(PyExc_NotImplementedError, "Unknown file type");
     }
-    entry->type = 0;
     entry->uid = st.nfs_uid;
     return (PyObject *)entry;
 }
