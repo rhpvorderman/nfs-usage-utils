@@ -47,6 +47,10 @@ def crawlnfs_async(
 ) -> Iterator[nfs.NFSDirEntry]:
     if max_requests < 1:
         raise ValueError("max_requests should be 1 or higher")
+    first_entry = nfs.stat(nfs_mount, path)
+    yield first_entry
+    if not first_entry.is_dir():
+        return
     todo_dirs = [path]
     requested_dirs: Dict[str, nfs.ScandirIterator] = {}
 
