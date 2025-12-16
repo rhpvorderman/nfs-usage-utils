@@ -429,6 +429,96 @@ NFSDirEntry_from_dirpath_and_dirent(PyObject *dirpath, struct nfsdirent *dirent)
     return (PyObject *)self;
 }
 
+PyObject *
+stat_impl(PyObject *module, PyObject *args, PyObject *kwargs)
+{
+    PyObject *nfs_mount = NULL;
+    PyObject *path_in = NULL; 
+    static char *format = "O!|O:scandir";
+    static char *keywords[] = {"nfs_mount", "path", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, format, keywords, 
+     &NFSMount_Type, &nfs_mount, &path_in)) {
+        return NULL;
+    }
+    PyObject *path;
+    if (path_in == NULL) {
+        path = PyUnicode_DecodeASCII("/", 1, NULL);
+    } else {
+        path = PyOS_FSPath(path_in);
+    }
+    if (path == NULL) {
+        return NULL;
+    }
+    /* No supporting of bytes. */
+    if (PyBytes_Check(path)) {
+        PyErr_Format(PyExc_TypeError, "Path should be a string, not bytes: %R", path_in);
+        return NULL;
+    }    
+    struct nfs_context *context = ((NFSMount *)nfs_mount)->context;
+    const char *utf_path = PyUnicode_AsUTF8(path);
+    const char *utf_name = strrchr(utf_path, '/');
+    if (utf_name == NULL) {
+        utf_name = utf_path;
+    }
+    else {
+        utf_name += 1;  // skip / character
+    }
+    struct nfs_stat_64 st;
+    int ret = nfs_stat64(context, utf_path, &st);
+    if (ret != 0) {
+        PyErr_SetString(
+            nfs_error_to_python_error(-ret), 
+            nfs_get_error(context));
+        return NULL;
+    }
+    NFSDirEntry *entry = PyObject_New(NFSDirEntry, &NFSDirEntry_Type);
+    PyObject *name = PyUnicode_FromString(utf_name);
+    if (name == NULL || entry == NULL) {
+        return NULL;
+    }
+    entry->path = path;
+    entry->name = name;
+
+    entry->atime = st.nfs_atime;
+    entry->blksize = st.nfs_blksize;
+    entry->blocks = st.nfs_blocks;
+    entry->ctime = st.nfs_ctime;
+    entry->dev = st.nfs_dev;
+    entry->gid = st.nfs_gid;
+    entry->inode = st.nfs_ino;
+    entry->mode = st.nfs_mode;
+    entry->mtime = st.nfs_mtime;
+    entry->nlink = st.nfs_nlink;
+    entry->rdev = st.nfs_rdev;
+    entry->size = st.nfs_size; 
+    if (S_ISBLK(entry->mode)) {
+        entry->type = NF4BLK;
+    }
+    else if (S_ISCHR(entry->mode)) {
+        entry->type = NF4CHR;
+    }
+    else if (S_ISDIR(entry->mode)) {
+        entry->type = NF4DIR;
+    }
+    else if (S_ISFIFO(entry->mode)) {
+        entry->type = NF4FIFO;
+    }
+    else if (S_ISLNK(entry->mode)) {
+        entry->type = NF4LNK;
+    }
+    else if (S_ISREG(entry->mode)) {
+        entry->type = NF4REG;
+    }
+    else if (S_ISSOCK(entry->mode)) {
+        entry->type = NF4SOCK;
+    }
+    else {
+        PyErr_SetString(PyExc_NotImplementedError, "Unknown file type");
+    }
+    entry->type = 0;
+    entry->uid = st.nfs_uid;
+    return (PyObject *)entry;
+}
 
 typedef struct ScandirIterator_struct {
     PyObject_HEAD
