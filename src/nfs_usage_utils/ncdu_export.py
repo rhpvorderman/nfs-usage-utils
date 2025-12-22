@@ -17,11 +17,14 @@
 """
 Utility to create a ncdu.json file from an export
 """
-
+import argparse
 import json
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, Iterable, List
 
 from . import _nfs
+from .common_arguments import add_common_arguments, nfs_url_and_prefix_from_args
+from .nfscrawler import crawlnfs
+from ._version import __version__
 
 # See https://dev.yorhel.nl/ncdu/jsonfmt
 
@@ -76,3 +79,35 @@ class Info:
         if self.excluded:
             answer["excluded"] = self.excluded
         return json.dumps(answer)
+
+
+def NFSEntry_to_info(entry: _nfs.NFSDirEntry):
+    answer = {
+        "name": entry.name,
+        "asize": entry.st_size,
+        "dsize": entry.st_blocks * entry.st_blksize,
+        "dev": entry.st_dev,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    add_common_arguments(parser)
+    args = parser.parse_args()
+    url, prefix = nfs_url_and_prefix_from_args(args)
+    with _nfs.NFSMount(url) as mount:
+        crawl = crawlnfs(mount, prefix)
+        # Set the path separator to \x00 so it comes before all other characters.
+        # This ensures that directories always come before the respective files.
+        entries: List[_nfs.NFSDirEntry] = sorted(
+            crawl, key=lambda x: x.path.replace("/", "\x00"))
+    major_version = 1
+    minor_version = 2  # ncdu 1.16 and higher
+    metadata = dict(progname="nfs_usage_utils", progver=__version__)
+    print(f"[{major_version}, {minor_version}, {json.dumps(metadata)},")
+    for entry in entries:  # type: _nfs.NFSDirEntry
+        pass
+
+
+if __name__ == "__main__":
+    main()
