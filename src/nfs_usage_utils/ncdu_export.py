@@ -19,7 +19,8 @@ Utility to create a ncdu.json file from an export
 """
 import argparse
 import json
-from typing import Dict, Optional, Union, Iterable, List
+import os.path
+from typing import Any, Dict, Iterator, List
 
 from . import _nfs
 from .common_arguments import add_common_arguments, nfs_url_and_prefix_from_args
@@ -28,85 +29,78 @@ from ._version import __version__
 
 # See https://dev.yorhel.nl/ncdu/jsonfmt
 
-class Info:
-    # use slots to save on space.
-    __slots__ = ("name", "asize", "dsize", "ino", "nlink", "dev", "read_error",
-                 "not_reg", "excluded", "children")
 
-    def __init__(
-        self,
-        name: str,
-        asize: int = 0,
-        dsize: int = 0,
-        ino: int = 0,
-        nlink: int = 0,
-        dev: int = 0,
-        read_error: bool = False,
-        not_reg: bool = False,
-        excluded: Optional[str] = None,
-        children: Optional[Dict] = None,
-    ):
-        self.name = name
-        self.asize = asize
-        self.dsize = dsize
-        self.ino = ino
-        self.nlink = nlink
-        self.dev = dev
-        self.read_error = read_error
-        self.not_reg = not_reg
-        self.excluded = excluded
-        if self.children is None:
-            self.children = {}
-        else:
-            self.children = self.children
-
-    def to_json_repr(self, parent_dev: int = 0) -> str:
-        answer: Dict[str, Union[int, str, bool]] = {"name": self.name}
-        if self.asize:
-            answer["asize"] = self.asize
-        if self.dsize:
-            answer["dsize"] = self.dsize
-        if parent_dev != self.dev:
-            answer["dev"] = self.dev
-        if self.nlink > 1:
-            answer["ino"] = self.ino
-            answer["nlink"] = self.nlink
-            answer["hlnkc"] = True
-        if self.read_error:
-            answer["read_error"] = True
-        if self.not_reg:
-            answer["not_reg"] = True
-        if self.excluded:
-            answer["excluded"] = self.excluded
-        return json.dumps(answer)
-
-
-def NFSEntry_to_info(entry: _nfs.NFSDirEntry):
+def NFSDirEntry_to_info_block(entry: _nfs.NFSDirEntry, parent_dev: int = 0) -> Dict[str, Any]:
     answer = {
         "name": entry.name,
         "asize": entry.st_size,
         "dsize": entry.st_blocks * entry.st_blksize,
-        "dev": entry.st_dev,
     }
+    if entry.st_dev != parent_dev:
+        answer["dev"] = entry.st_dev
+    if entry.st_nlink > 1:
+        answer["ino"] = entry.st_ino
+        answer["nlink"] = entry.st_nlink
+        answer["hlnkc"] = True
+    if not (entry.is_dir() or entry.is_file()):
+        answer["notreg"] = True
+    return answer
 
 
 def main():
     parser = argparse.ArgumentParser()
     add_common_arguments(parser)
+    parser.add_argument("-o", "--out", default="/dev/stdout",
+                        help="output file")
     args = parser.parse_args()
     url, prefix = nfs_url_and_prefix_from_args(args)
     with _nfs.NFSMount(url) as mount:
         crawl = crawlnfs(mount, prefix)
         # Set the path separator to \x00 so it comes before all other characters.
-        # This ensures that directories always come before the respective files.
+        # This ensures that after sorting directories always come before the
+        # respective files.
         entries: List[_nfs.NFSDirEntry] = sorted(
             crawl, key=lambda x: x.path.replace("/", "\x00"))
-    major_version = 1
-    minor_version = 2  # ncdu 1.16 and higher
-    metadata = dict(progname="nfs_usage_utils", progver=__version__)
-    print(f"[{major_version}, {minor_version}, {json.dumps(metadata)},")
-    for entry in entries:  # type: _nfs.NFSDirEntry
-        pass
+    if len(entries) < 1:
+        return
+
+    with open(args.out, "wt") as out:
+        major_version = 1
+        minor_version = 2  # ncdu 1.16 and higher
+        metadata = dict(progname="nfs_usage_utils", progver=__version__)
+
+        out.write(f"[{major_version}, {minor_version}, {json.dumps(metadata)},\n")
+
+        entry_iter: Iterator[_nfs.NFSDirEntry] = iter(entries)
+        first_entry: _nfs.NFSDirEntry = next(entry_iter)
+        assert (first_entry.is_dir())
+        first_entry_info = NFSDirEntry_to_info_block(first_entry, -1)
+        # The top level entry should have the full path according to the spec.
+        first_entry_info["name"] = first_entry.path
+        out.write("[")
+        out.write(json.dumps(first_entry_info))
+        current_dirs = [first_entry]
+        for entry in entry_iter:  # type: _nfs.NFSDirEntry
+            current_dir = current_dirs[-1]
+            while os.path.dirname(entry.path) != current_dir.path:
+
+                out.write("]")
+                current_dirs.pop()
+                current_dir = current_dirs[-1]
+            if entry.is_dir():
+                out.write(",\n[")
+                current_dirs.append(entry)
+                current_dir = entry
+                out.write(json.dumps(NFSDirEntry_to_info_block(
+                    entry, parent_dev=current_dir.st_dev)))
+            else:
+                out.write(",\n")
+                out.write(json.dumps(NFSDirEntry_to_info_block(
+                    entry, parent_dev=current_dir.st_dev)))
+        while len(current_dirs) > 0:
+            current_dirs.pop()
+            out.write("]")  # Finish open directories
+        out.write("]")  # Finish total array.
 
 
 if __name__ == "__main__":
