@@ -54,8 +54,8 @@ def main():
                         help="output file")
     args = parser.parse_args()
     url, prefix = nfs_url_and_prefix_from_args(args)
-    with _nfs.NFSMount(url) as mount:
-        crawl = crawlnfs(mount, prefix)
+    with _nfs.NFSMount(url, hash_size = args.max_requests // 10) as mount:
+        crawl = crawlnfs(mount, max_requests=args.max_requests)
         # Set the path separator to \x00 so it comes before all other characters.
         # This ensures that after sorting directories always come before the
         # respective files.
@@ -76,7 +76,7 @@ def main():
         assert (first_entry.is_dir())
         first_entry_info = NFSDirEntry_to_info_block(first_entry, -1)
         # The top level entry should have the full path according to the spec.
-        first_entry_info["name"] = first_entry.path
+        first_entry_info["name"] = prefix
         out.write("[")
         out.write(json.dumps(first_entry_info))
         current_dirs = [first_entry]
