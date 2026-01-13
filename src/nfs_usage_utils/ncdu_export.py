@@ -20,6 +20,7 @@ Utility to create a ncdu.json file from an export
 import argparse
 import json
 import os.path
+import typing
 from typing import Any, Dict, Iterator, List
 
 from . import _nfs
@@ -28,6 +29,23 @@ from .nfscrawler import crawlnfs
 from ._version import __version__
 
 # See https://dev.yorhel.nl/ncdu/jsonfmt
+
+NONREG = 0
+ISDIR = 1
+ISFILE = 2
+
+class Info(typing.NamedTuple):
+    path: str
+    asize: int
+    dsize: int
+    dev: int
+    ino: int
+    nlink: int
+    type: int
+
+    @property
+    def name(self) -> str:
+        return os.path.basename(self.path)
 
 
 def NFSDirEntry_to_info_block(entry: _nfs.NFSDirEntry, parent_dev: int = 0) -> Dict[str, Any]:
