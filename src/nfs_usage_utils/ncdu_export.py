@@ -20,6 +20,7 @@ Utility to create a ncdu.json file from an export
 import argparse
 import json
 import os.path
+import struct
 import typing
 from typing import Any, Dict, Iterator, List
 
@@ -30,22 +31,89 @@ from ._version import __version__
 
 # See https://dev.yorhel.nl/ncdu/jsonfmt
 
-NONREG = 0
-ISDIR = 1
-ISFILE = 2
+NOTREG = 0
+DIR = 1
+FILE = 2
 
 class Info(typing.NamedTuple):
+    """Little helper class to make NFSDirEntry's less memory intensive"""
     path: str
     asize: int
     dsize: int
     dev: int
     ino: int
     nlink: int
-    type: int
+    filetype: int
 
-    @property
     def name(self) -> str:
+        """Retrieves the name from the path as it is redundant."""
         return os.path.basename(self.path)
+
+    def to_bytes(self) -> bytes:
+        path = self.path.encode("utf-8")
+        data = struct.pack(
+            "<QQQQIB",
+            self.asize,  # uint64_t
+            self.dsize,      # uint64_t
+            self.dev,        # uint64_t
+            self.ino,        # uint64_t
+            self.nlink,      # uint32_t
+            self.filetype,   # uint8_t
+        )
+        return path + b"\x00" + data
+
+    @classmethod
+    def from_bytes(cls, buffer: bytes):
+        path, data = buffer.split(b"\x00")
+        asize, dsize, dev, ino, nlink, filetype = struct.unpack("<QQQQIB", data)
+        return cls(
+            path = path.decode("utf-8"),
+            asize=asize,
+            dsize=dsize,
+            dev=dev,
+            ino=ino,
+            nlink=nlink,
+            filetype=filetype,
+        )
+
+    @classmethod
+    def from_nfs_dir_entry(cls, entry: _nfs.NFSDirEntry):
+        # Data compression is based on this assumption, so test it.
+        if os.path.basename(entry.path) != entry.name:
+            raise RuntimeError(
+                f"Path and name basename do not match. {entry.path} | {entry.name}"
+            )
+        if entry.is_file():
+            tp = FILE,
+        elif entry.is_dir():
+            tp = DIR
+        else:
+            tp = NOTREG
+        return cls(
+            path=entry.path,
+            asize=entry.st_size,
+            dsize=entry.st_blocks * entry.st_blksize,
+            dev=entry.st_dev,
+            ino=entry.st_ino,
+            nlink = entry.st_nlink,
+            filetype=tp,
+        )
+
+    def to_json(self, parent_dev: int = 0) -> Dict[str, Any]:
+        answer = {
+            "name": self.name(),
+            "asize": self.asize,
+            "dsize": self.dsize,
+        }
+        if self.dev != parent_dev:
+            answer["dev"] = self.dev
+        if self.nlink > 1:
+            answer["ino"] = self.ino
+            answer["nlink"] = self.nlink
+            answer["hlnkc"] = True
+        if self.filetype == NOTREG:
+            answer["notreg"] = True
+        return answer
 
 
 def NFSDirEntry_to_info_block(entry: _nfs.NFSDirEntry, parent_dev: int = 0) -> Dict[str, Any]:
