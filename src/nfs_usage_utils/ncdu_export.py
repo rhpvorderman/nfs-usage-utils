@@ -50,7 +50,7 @@ def NFSDirEntry_to_info_block(entry: _nfs.NFSDirEntry, parent_dev: int = 0) -> D
 def main():
     parser = argparse.ArgumentParser()
     add_common_arguments(parser)
-    parser.add_argument("-o", "--out", default="/dev/stdout",
+    parser.add_argument("-o", "--out", default="ncdu.json",
                         help="output file")
     args = parser.parse_args()
     url, prefix = nfs_url_and_prefix_from_args(args)
