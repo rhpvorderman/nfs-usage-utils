@@ -30,7 +30,7 @@ urls.homepage = "https://github.com/rhpvorderman/nfs-usage-utils"
 nfs-usage-by-extension = "nfs_usage_utils.usage_by_extension:main"
 nfs-find = "nfs_usage_utils.find:main"
 nfs-path-to-url = "nfs_usage_utils.fstab:main"
-nfs-ncdu-export = "nfs_usage_utils.ncdu_export:main"
+nfs-disk-usage-index = "nfs_usage_utils.disk_usage_index:main"
 
 [tool.setuptools_scm]
 version_file = "src/nfs_usage_utils/_version.py"

@@ -15,7 +15,7 @@
 # along with nfs-usage-utils.  If not, see <https://www.gnu.org/licenses/
 
 """
-Utility to create a ncdu.json file from an export
+Utility to create a disk usage index for ncdu and krona
 """
 import argparse
 import json
@@ -47,24 +47,9 @@ def NFSDirEntry_to_info_block(entry: _nfs.NFSDirEntry, parent_dev: int = 0) -> D
     return answer
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    add_common_arguments(parser)
-    parser.add_argument("-o", "--out", default="ncdu.json",
-                        help="output file")
-    args = parser.parse_args()
-    url, prefix = nfs_url_and_prefix_from_args(args)
-    with _nfs.NFSMount(url, hash_size = args.max_requests // 10) as mount:
-        crawl = crawlnfs(mount, max_requests=args.max_requests)
-        # Set the path separator to \x00 so it comes before all other characters.
-        # This ensures that after sorting directories always come before the
-        # respective files.
-        entries: List[_nfs.NFSDirEntry] = sorted(
-            crawl, key=lambda x: x.path.replace("/", "\x00"))
-    if len(entries) < 1:
-        return
-
-    with open(args.out, "wt") as out:
+def sorted_direntries_to_ncdu_index(
+        entries: List[_nfs.NFSDirEntry], prefix: str, outfile: str) -> None:
+    with open(outfile, "wt") as out:
         major_version = 1
         minor_version = 2  # ncdu 1.16 and higher
         metadata = dict(progname="nfs_usage_utils", progver=__version__)
@@ -101,6 +86,44 @@ def main():
             current_dirs.pop()
             out.write("]")  # Finish open directories
         out.write("]")  # Finish total array.
+
+
+def sorted_direntries_to_krona_index(
+        entries: List[_nfs.NFSDirEntry],
+        prefix: str,
+        outfile: str,
+) -> None:
+    pass
+
+
+def main():
+    parser = argparse.ArgumentParser(__doc__)
+    add_common_arguments(parser)
+    parser.add_argument("--ncdu-out", default="ncdu.json",
+                        help="output file")
+    parser.add_argument("--krona-out", default="krona.xml",
+                        help="output file")
+    args = parser.parse_args()
+    url, prefix = nfs_url_and_prefix_from_args(args)
+    with _nfs.NFSMount(url, hash_size = args.max_requests // 10) as mount:
+        crawl = crawlnfs(mount, max_requests=args.max_requests)
+        # Set the path separator to \x00 so it comes before all other characters.
+        # This ensures that after sorting directories always come before the
+        # respective files.
+        entries: List[_nfs.NFSDirEntry] = sorted(
+            crawl, key=lambda x: x.path.replace("/", "\x00"))
+    if len(entries) < 1:
+        return
+    sorted_direntries_to_ncdu_index(
+        entries=entries,
+        prefix=prefix,
+        outfile=args.ncdu_out,
+    )
+    sorted_direntries_to_krona_index(
+        entries=entries,
+        prefix=prefix,
+        outfile=args.krona_out,
+    )
 
 
 if __name__ == "__main__":
