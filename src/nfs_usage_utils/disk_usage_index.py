@@ -15,12 +15,21 @@
 # along with nfs-usage-utils.  If not, see <https://www.gnu.org/licenses/
 
 """
-Utility to create a disk usage index for ncdu and krona
+Utility to create a disk usage index for ncdu and krona.
+
+Creates a ncdu.json file which can be opened with '''ncdu -f ncdu.json'''
+
+Creates a krona.xml file which can be converted to krona html with
+'''ktImportXML krona.xml'''
+
 """
 import argparse
+import html
 import json
+import math
 import os.path
-from typing import Any, Dict, Iterator, List
+import time
+from typing import Any, Dict, Iterator, List, Tuple
 
 from . import _nfs
 from .common_arguments import add_common_arguments, nfs_url_and_prefix_from_args
@@ -88,12 +97,77 @@ def sorted_direntries_to_ncdu_index(
         out.write("]")  # Finish total array.
 
 
+def node_start(entry: _nfs.NFSDirEntry, current_time: float) -> str:
+    age_days = round(entry.st_mtime - current_time / (24 * 60 * 60))
+    name = html.escape(entry.name)
+    path = html.escape(entry.path)
+    return (
+        f'<node name="{name}" '
+        f'href="file://{path}">\n'
+        f'<age><val>{age_days}</val></age>\n'
+        f'<score><val>{math.log(age_days + 1)}</val></score>\n'
+    )
+
+
+def node_end(magnitude: float) -> str:
+    return (
+        f'<magnitude><val>{magnitude}</val></magnitude>\n'
+        f'</node>\n'
+    )
+
+
 def sorted_direntries_to_krona_index(
         entries: List[_nfs.NFSDirEntry],
         prefix: str,
         outfile: str,
 ) -> None:
-    pass
+    with open(outfile, "wt") as out:
+        out.write('<krona collapse="false" key="true">\n')
+        out.write('<attributes magnitude="magnitude">\n')
+        out.write('<attribute display="Size (GiB)">magnitude</attribute>\n')
+        out.write('<attribute display="Age (days since modified)">age</attribute>\n')
+        out.write('<attribute display="Log(Age+1)">score</attribute>\n')
+        out.write("</attributes>\n")
+        out.write(
+            '<color attribute="score" '
+            'hueStart="300" '
+            'hueEnd="240" '
+            'valueStart="0.602059991327962" '
+            'valueEnd="2.27415784926368" '
+            'default="false" >'
+            '</color>')
+
+        current_time = time.time()
+        entry_iter: Iterator[_nfs.NFSDirEntry] = iter(entries)
+        first_entry: _nfs.NFSDirEntry = next(entry_iter)
+        assert (first_entry.is_dir())
+        current_dirs = [first_entry]
+        dir_magnitudes = [0]
+        out.write(node_start(first_entry, current_time))
+
+        for entry in entry_iter:  # type: _nfs.NFSDirEntry
+            current_dir = current_dirs[-1]
+            while os.path.dirname(entry.path) != current_dir.path:
+                # Exiting dir
+                total_magnitude = dir_magnitudes.pop()
+                out.write(node_end(magnitude=total_magnitude))
+                current_dirs.pop()
+                current_dir = current_dirs[-1]
+            if entry.is_dir():
+                out.write(node_start(entry, current_time))
+                current_dirs.append(entry)
+                dir_magnitudes.append(0)
+            else:
+                out.write(node_start(entry, current_time))
+                magnitude = entry.st_blksize * entry.st_blocks / 1024 ** 3
+                for i, size in enumerate(dir_magnitudes):
+                    dir_magnitudes[i] = size + magnitude
+                out.write(node_end(magnitude))
+        while len(current_dirs) > 0:
+            current_dirs.pop()
+            magnitude = dir_magnitudes.pop()
+            out.write(node_end(magnitude))
+        out.write("</krona>")
 
 
 def main():
