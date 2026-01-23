@@ -28,6 +28,7 @@ import html
 import json
 import math
 import os.path
+import sys
 import time
 from typing import Any, Dict, Iterator, List, Tuple
 
@@ -97,21 +98,34 @@ def sorted_direntries_to_ncdu_index(
         out.write("]")  # Finish total array.
 
 
-def node_start(entry: _nfs.NFSDirEntry, current_time: float) -> str:
-    age_days = round(entry.st_mtime - current_time / (24 * 60 * 60))
+def dirnode_start(entry: _nfs.NFSDirEntry, prefix: str, current_time: float, magnitude: float) -> str:
+    age_days = round((current_time - entry.st_mtime) / (24 * 60 * 60))
     name = html.escape(entry.name)
     path = html.escape(entry.path)
     return (
         f'<node name="{name}" '
-        f'href="file://{path}">\n'
+        f'href="file://{prefix}/{path}">\n'
         f'<age><val>{age_days}</val></age>\n'
         f'<score><val>{math.log(age_days + 1)}</val></score>\n'
+        f'<magnitude><val>{magnitude}</val></magnitude>\n'
     )
 
 
-def node_end(magnitude: float) -> str:
+def dirnode_end() -> str:
+    return '</node>\n'
+
+
+def filenode(entry: _nfs.NFSDirEntry, prefix: str, current_time: float):
+    magnitude = entry.st_blksize * entry.st_blocks / 1024 ** 3
+    return dirnode_start(entry, prefix, current_time, magnitude) + dirnode_end()
+
+
+def small_files_and_folders_node(filesize, minimum_age):
     return (
-        f'<magnitude><val>{magnitude}</val></magnitude>\n'
+        f'<node name="[Small files or folders]">\n'
+        f'<magnitude><val>{filesize / 1024 ** 3}</val></magnitude>\n'
+        f'<age><val>{minimum_age}</val></age>\n'
+        f'<score><val>{math.log(minimum_age + 1)}</val></score>\n'
         f'</node>\n'
     )
 
@@ -121,6 +135,36 @@ def sorted_direntries_to_krona_index(
         prefix: str,
         outfile: str,
 ) -> None:
+
+    # First determine the size of all dirs
+    entry_iter: Iterator[_nfs.NFSDirEntry] = iter(entries)
+    first_entry: _nfs.NFSDirEntry = next(entry_iter)
+    assert (first_entry.is_dir())
+    current_dirs = [first_entry]
+    dir_magnitudes = [0]
+    total_size = 0
+    dir_sizes: Dict[str, int] = {}
+    for entry in entries:
+        current_dir = current_dirs[-1]
+        while os.path.dirname(entry.path) != current_dir.path:
+            # Exiting dir
+            total_magnitude = dir_magnitudes.pop()
+            sized_dir_entry = current_dirs.pop()
+            dir_sizes[sized_dir_entry.path] = total_magnitude
+            current_dir = current_dirs[-1]
+        if entry.is_dir():
+            current_dirs.append(entry)
+            dir_magnitudes.append(0)
+        elif entry.is_file():
+            magnitude = entry.st_blksize * entry.st_blocks
+            for i, size in enumerate(dir_magnitudes):
+                dir_magnitudes[i] = size + magnitude
+            total_size += magnitude
+    while len(current_dirs) > 0:
+        dir_sizes[current_dirs.pop().path] = dir_magnitudes.pop()
+
+    size_threshold = total_size // 1000
+
     with open(outfile, "wt") as out:
         out.write('<krona collapse="false" key="true">\n')
         out.write('<attributes magnitude="magnitude">\n')
@@ -140,33 +184,68 @@ def sorted_direntries_to_krona_index(
         current_time = time.time()
         entry_iter: Iterator[_nfs.NFSDirEntry] = iter(entries)
         first_entry: _nfs.NFSDirEntry = next(entry_iter)
-        assert (first_entry.is_dir())
         current_dirs = [first_entry]
-        dir_magnitudes = [0]
-        out.write(node_start(first_entry, current_time))
-
+        out.write(dirnode_start(
+            entry=first_entry,
+            prefix=prefix,
+            current_time=current_time,
+            magnitude=dir_sizes[first_entry.path] / 1024 ** 3,
+        ))
+        small_files_and_folders_sizes = [0]
+        small_files_and_folders_ages = [0]
+        skipped_dirs = set()
         for entry in entry_iter:  # type: _nfs.NFSDirEntry
             current_dir = current_dirs[-1]
+            if os.path.dirname(entry.path) in skipped_dirs:
+                if entry.is_dir():
+                    skipped_dirs.add(entry.path)
+                continue
             while os.path.dirname(entry.path) != current_dir.path:
                 # Exiting dir
-                total_magnitude = dir_magnitudes.pop()
-                out.write(node_end(magnitude=total_magnitude))
+                small_sizes = small_files_and_folders_sizes.pop()
+                small_ages = small_files_and_folders_ages.pop()
+                if small_sizes > 0:
+                    out.write(small_files_and_folders_node(small_sizes, small_ages))
+                out.write(dirnode_end())
                 current_dirs.pop()
                 current_dir = current_dirs[-1]
             if entry.is_dir():
-                out.write(node_start(entry, current_time))
+                dir_bytes = dir_sizes[entry.path]
+                if dir_bytes < size_threshold:
+                    skipped_dirs.add(entry.path)
+                    small_files_and_folders_sizes[-1] += dir_bytes
+                    age_days = round((current_time - entry.st_mtime) / (24 * 60 * 60))
+                    small_files_and_folders_ages[-1] = min(
+                        small_files_and_folders_ages[-1], age_days)
+                    continue
+                out.write(dirnode_start(
+                    entry=entry,
+                    prefix=prefix,
+                    current_time=current_time,
+                    magnitude=dir_sizes[entry.path] / 1024 ** 3,
+                ))
+                small_files_and_folders_sizes.append(0)
+                small_files_and_folders_ages.append(sys.maxsize)
                 current_dirs.append(entry)
-                dir_magnitudes.append(0)
-            else:
-                out.write(node_start(entry, current_time))
-                magnitude = entry.st_blksize * entry.st_blocks / 1024 ** 3
-                for i, size in enumerate(dir_magnitudes):
-                    dir_magnitudes[i] = size + magnitude
-                out.write(node_end(magnitude))
+            elif entry.is_file():
+                filesize = entry.st_blksize * entry.st_blocks
+                if filesize < size_threshold:
+                    small_files_and_folders_sizes[-1] += filesize
+                    age_days = round((current_time - entry.st_mtime) / (24 * 60 * 60))
+                    small_files_and_folders_ages[-1] = min(
+                        small_files_and_folders_ages[-1], age_days)
+                    continue
+                out.write(filenode(
+                    entry=entry,
+                    prefix=prefix,
+                    current_time=current_time
+                ))
         while len(current_dirs) > 0:
             current_dirs.pop()
-            magnitude = dir_magnitudes.pop()
-            out.write(node_end(magnitude))
+            small_sizes = small_files_and_folders_sizes.pop()
+            small_ages = small_files_and_folders_ages.pop()
+            out.write(small_files_and_folders_node(small_sizes, small_ages))
+            out.write(dirnode_end())
         out.write("</krona>")
 
 
