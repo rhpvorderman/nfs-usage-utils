@@ -116,7 +116,8 @@ def file_to_magnitude(entry: _nfs.NFSDirEntry):
 
 def dirnode_start(entry: _nfs.NFSDirEntry, prefix: str, magnitude: float) -> str:
     age_days = file_age_days(entry)
-    name = html.escape(entry.name)
+    # If entry has no name it is the root folder
+    name = html.escape(entry.name or "root")
     path = html.escape(entry.path)
     return (
         f'<node name="{name}" '
