@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nfs-usage-utils"
+dynamic = ["version"]
+description = "Python scripts using calls to libnfs for fast usage and dedup scripts."
+license="MIT"
+keywords=["nfs", "nfsv4", "disk usage"]
+authors = [{name = "Leiden University Medical Center"},
+           {email = "r.h.p.vorderman@lumc.nl"}]
+readme = "README.rst"
+requires-python = ">=3.11"
+classifiers = [
+        "Programming Language :: Python :: 3 :: Only",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: Implementation :: CPython",
+        "Programming Language :: C",
+        "Development Status :: 5 - Production/Stable",
+        "Topic :: System :: Filesystems",
+        "Topic :: System :: Systems Administration",
+        "Operating System :: POSIX :: Linux",
+]
+urls.homepage = "https://github.com/rhpvorderman/nfs-usage-utils"
+
+[project.scripts]
+nfs-usage-by-extension = "nfs_usage_utils.usage_by_extension:main"
+nfs-find = "nfs_usage_utils.find:main"
+nfs-path-to-url = "nfs_usage_utils.fstab:main"
+nfs-disk-usage-index = "nfs_usage_utils.disk_usage_index:main"
+
+[tool.setuptools_scm]
+version_file = "src/nfs_usage_utils/_version.py"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+nfs_usage_utils = ['*.pyi', 'py.typed']
